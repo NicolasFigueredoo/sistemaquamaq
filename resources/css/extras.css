@@ -1,0 +1,15 @@
+/* Agregados para la versión conectada (no existían en la maqueta). */
+.empty-row td{color:var(--muted);text-align:center;padding:18px 12px}
+.form-errors{margin:10px 0 0;color:var(--red);font-size:11px;font-weight:700}
+.form-errors p{margin:3px 0}
+.plant-card,button:not(:disabled),[role=button],select{cursor:pointer}
+.save-button:disabled,.save-note:disabled,.login-button:disabled{opacity:.6;cursor:default}
+.exemys-meta{font-size:12px;color:var(--muted);margin:12px 0}
+.exemys-meta b{color:var(--navy)}
+.exemys-table{margin-bottom:6px}
+.trend-controls button{padding:0 9px;font-size:11px}
+.trend-controls button.active{background:var(--navy);color:#fff;border-color:var(--navy)}
+.trend-range{display:flex;flex-direction:column;align-items:stretch;gap:6px}
+.trend-days{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:800;color:var(--navy)}
+.trend-days span{min-width:44px;text-align:right}
+.trend-days input{flex:1;accent-color:var(--blue);cursor:pointer}

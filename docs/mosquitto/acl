@@ -1,0 +1,9 @@
+# El ingestor de Laravel lee todo lo de IVESS
+user ivess-ingestor
+topic read ivess/#
+
+# Cada gateway solo puede publicar en sus propios topics.
+# %u = usuario MQTT, que debe ser igual al serial (php artisan telemetry:gateway lo propone así).
+pattern write ivess/%u/telemetry
+pattern write ivess/%u/cip
+pattern write ivess/%u/status
