@@ -54,8 +54,8 @@ function cardValue(v) {
 function cardTarget(v) {
     const sp = formatComma(v.setpoint, v.decimals)
     if (v.kind === 'boolean') return v.value == null || v.value >= 0.5 ? 'Presencia confirmada' : 'Presencia no detectada'
-    if (v.key === 'effective_time') return `Objetivo ${sp} ${v.unit}`
-    return `${v.rule === 'max' ? 'Máximo permitido' : 'Mínimo requerido'} ${sp} ${v.unit}`
+    if (v.key === 'effective_time') return `Objetivo ${sp}`
+    return `${v.rule === 'max' ? 'Máximo permitido' : 'Mínimo requerido'} ${sp}`
 }
 
 const bannerText = computed(() => {
@@ -126,7 +126,7 @@ const go = (url) => router.visit(url)
                 <article v-for="v in cards" :key="v.key" class="measurement">
                     <div class="label"><span class="dot" :style="{ background: dotColor(v) }"></span>{{ v.shortName }}</div>
                     <div class="value">{{ cardValue(v).unit ? `${cardValue(v).value} ` : cardValue(v).value }}<span v-if="cardValue(v).unit" class="unit">{{ cardValue(v).unit }}</span></div>
-                    <div class="target" :style="targetColor(v) ? { color: targetColor(v) } : null">{{ cardTarget(v) }}</div>
+                    <div class="target" :style="targetColor(v) ? { color: targetColor(v) } : null">{{ cardTarget(v) }}<span v-if="v.kind !== 'boolean'" class="target-unit"> {{ v.unit }}</span></div>
                 </article>
             </div>
 
