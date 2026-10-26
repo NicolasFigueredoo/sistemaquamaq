@@ -5,7 +5,7 @@ Topic base: `ivess/{SERIAL}/...` (el serial es el que diste de alta con `php art
 ## Telemetría — `ivess/{SERIAL}/telemetry`
 
 ```json
-{"ts": 1759600000000, "values": {"ozone": 0.55, "temperature": 62.4, "alkaline": 24.1, "effective_time": 121, "chlorine": 1}}
+{"ts": 1759600000000, "values": {"ozone": 0.55, "temperature": 62.4, "alkaline": 361, "effective_time": 121, "chlorine": 1}}
 ```
 
 - `ts`: epoch en milisegundos o segundos, o texto ISO (`2026-10-04T14:32:10-03:00`). Sin zona se asume hora argentina.

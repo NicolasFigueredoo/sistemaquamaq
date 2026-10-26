@@ -26,7 +26,7 @@ class DemoSignals
     {
         $i = $t + $phase;
 
-        return 24.6 + sin($i / 15) * 2.1 + sin($i / 62) * 1.4;
+        return 369 + sin($i / 15) * 31.5 + sin($i / 62) * 21;
     }
 
     /** Caídas periódicas (una hora cada tantas) para que haya cruces del setpoint. */
@@ -37,7 +37,7 @@ class DemoSignals
         return match ($key) {
             'ozone' => ($i % 193) < 1 ? 0.11 : 0,
             'temperature' => ($i % 217) < 1 ? 8 : 0,
-            'alkaline' => ($i % 181) < 1 ? 6.5 : 0,
+            'alkaline' => ($i % 181) < 1 ? 97.5 : 0,
             default => 0,
         };
     }

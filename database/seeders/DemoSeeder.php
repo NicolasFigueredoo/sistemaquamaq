@@ -113,8 +113,8 @@ class DemoSeeder extends Seeder
         $selector = array_sum(array_map('ord', mb_str_split($name))) % 3;
         $deviated = ['ozone', 'temperature', 'alkaline'][$selector];
         $deviation = [
-            'warning' => ['ozone' => 0.06, 'temperature' => 3, 'alkaline' => 2.5],
-            'alarm' => ['ozone' => 0.14, 'temperature' => 8, 'alkaline' => 6],
+            'warning' => ['ozone' => 0.06, 'temperature' => 3, 'alkaline' => 37.5],
+            'alarm' => ['ozone' => 0.14, 'temperature' => 8, 'alkaline' => 90],
         ];
 
         $hourly = [];
@@ -216,7 +216,7 @@ class DemoSeeder extends Seeder
             return $setpoint - $deviation[$scenario][$key];
         }
         // Las variables sin desvío terminan dentro de parámetro.
-        $margin = ['ozone' => 0.04, 'temperature' => 1.5, 'alkaline' => 3][$key];
+        $margin = ['ozone' => 0.04, 'temperature' => 1.5, 'alkaline' => 45][$key];
 
         return max($value, $setpoint + $margin);
     }

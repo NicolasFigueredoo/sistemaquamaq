@@ -11,7 +11,7 @@ msg.payload = {
     values: {
         ozone: r.ozone / 100,          // ppm
         temperature: r.temp / 10,      // °C
-        alkaline: r.cond / 10,         // mS/cm
+        alkaline: r.cond,              // µS/cm
         effective_time: r.t_eff,       // segundos
         chlorine: r.cloro ? 1 : 0,     // presencia
     },

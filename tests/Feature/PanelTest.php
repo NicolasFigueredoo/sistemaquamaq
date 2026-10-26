@@ -91,7 +91,7 @@ class PanelTest extends TestCase
         $this->assertSame(PlantStatus::Conforme, $plant->fresh()->status);
 
         $admin = $this->user(Role::Admin);
-        $valid = ['setpoints' => ['ozone' => 0.55, 'temperature' => 60, 'alkaline' => 20], 'cip_period_days' => 5, 'tank_volume_l' => 1200, 'product_liters' => 20];
+        $valid = ['setpoints' => ['ozone' => 0.55, 'temperature' => 60, 'alkaline' => 300], 'cip_period_days' => 5];
 
         $this->actingAs($admin)->put("/plantas/{$plant->code}/configuracion", $valid)->assertRedirect();
 
@@ -99,7 +99,7 @@ class PanelTest extends TestCase
         $state = PlantVariableState::where('plant_id', $plant->id)->where('variable_id', Variable::where('key', 'ozone')->value('id'))->first();
         $this->assertSame(VariableState::Atencion, $state->state, '0,52 ya no cumple con setpoint 0,55');
         $this->assertSame(PlantStatus::Atencion, $plant->fresh()->status);
-        $this->assertSame(4, SetpointChange::count()); // ozone, período, tanque, producto
+        $this->assertSame(2, SetpointChange::count()); // ozone, período
         $this->assertSame($admin->id, SetpointChange::first()->user_id);
 
         $this->actingAs($admin)->put("/plantas/{$plant->code}/configuracion", array_replace_recursive($valid, ['setpoints' => ['ozone' => 2]]))

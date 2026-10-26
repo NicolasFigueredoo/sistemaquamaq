@@ -46,9 +46,6 @@ const dotColor = (v) => (offline.value ? 'var(--gray)' : variableColors[v.state]
 const targetColor = (v) => (offline.value || v.state === 'ok' ? null : v.state === 'alarma' ? 'var(--red)' : '#c47e00')
 
 function cardValue(v) {
-    if (v.key === 'alkaline') {
-        return { value: formatComma(props.settings.productLiters / props.settings.tankVolume * 100, 2), unit: '% estimado' }
-    }
     if (v.value == null) return { value: '—', unit: v.unit }
     if (v.kind === 'boolean') return { value: v.value >= 0.5 ? 'PRESENTE' : 'AUSENTE', unit: '' }
     return { value: formatComma(v.value, v.decimals), unit: v.unit }
@@ -56,9 +53,6 @@ function cardValue(v) {
 
 function cardTarget(v) {
     const sp = formatComma(v.setpoint, v.decimals)
-    if (v.key === 'alkaline') {
-        return `${sp} ${v.unit} · ${formatComma(props.settings.productLiters, 1)} L en ${Number(props.settings.tankVolume).toLocaleString('es-AR')} L`
-    }
     if (v.kind === 'boolean') return v.value == null || v.value >= 0.5 ? 'Presencia confirmada' : 'Presencia no detectada'
     if (v.key === 'effective_time') return `Objetivo ${sp} ${v.unit}`
     return `${v.rule === 'max' ? 'Máximo permitido' : 'Mínimo requerido'} ${sp} ${v.unit}`

@@ -239,8 +239,6 @@ class PlantPresenter
         return [
             'cipPeriodDays' => $s->cip_period_days,
             'cipWarningHours' => $s->cip_warning_hours,
-            'tankVolume' => $s->tank_volume_l,
-            'productLiters' => $s->product_liters,
         ];
     }
 

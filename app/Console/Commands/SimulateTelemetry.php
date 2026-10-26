@@ -97,7 +97,7 @@ class SimulateTelemetry extends Command
         $minute = intdiv($now->getTimestamp(), 60);
         $inDip = (($minute + $gateway->plant_id * 53) % 240) < 15;
         $dipKey = ['ozone', 'temperature', 'alkaline'][$gateway->plant_id % 3];
-        $dipBy = ['ozone' => 0.07, 'temperature' => 4, 'alkaline' => 3];
+        $dipBy = ['ozone' => 0.07, 'temperature' => 4, 'alkaline' => 45];
 
         $values = [];
         foreach ($variables as $v) {

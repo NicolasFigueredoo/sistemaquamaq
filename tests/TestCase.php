@@ -39,7 +39,7 @@ abstract class TestCase extends BaseTestCase
     protected function payload(int $tsMs, array $override = []): string
     {
         return json_encode(['ts' => $tsMs, 'values' => array_merge([
-            'ozone' => 0.58, 'temperature' => 63.0, 'alkaline' => 24.0, 'effective_time' => 121, 'chlorine' => 1,
+            'ozone' => 0.58, 'temperature' => 63.0, 'alkaline' => 360, 'effective_time' => 121, 'chlorine' => 1,
         ], $override)]);
     }
 }
