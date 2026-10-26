@@ -16,6 +16,7 @@ use Carbon\CarbonImmutable;
  *    ▲                              │                                          │
  *    └─────────(vuelve a cumplir)───┴───────────(vuelve a cumplir)─────────────┘
  *
+ * Las variables de Variable::IMMEDIATE_ALARM (temperatura) no tienen atención: pasan directo a alarma.
  * Solo las alarmas quedan registradas en alarm_events, con inicio = momento en que
  * salió de parámetro y fin = momento en que se normalizó.
  */
@@ -90,8 +91,9 @@ class VariableEvaluator
         }
 
         $outFor = CarbonImmutable::parse($state->out_since)->diffInSeconds($at);
+        $delay = $variable->alarmDelay($setpoint->alarm_delay_s);
 
-        if ($state->state !== VariableState::Alarma && $outFor >= $setpoint->alarm_delay_s) {
+        if ($state->state !== VariableState::Alarma && ($delay === 0 || $outFor >= $delay)) {
             $state->state = VariableState::Alarma;
             $event = AlarmEvent::create([
                 'plant_id' => $state->plant_id,

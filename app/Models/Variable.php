@@ -36,6 +36,15 @@ class Variable extends Model
         };
     }
 
+    /** Variables sin estado de atención: apenas salen de parámetro pasan a alarma. */
+    public const IMMEDIATE_ALARM = ['temperature'];
+
+    /** Segundos fuera de parámetro antes de ser alarma, según la variable y el setpoint configurado. */
+    public function alarmDelay(int $configured): int
+    {
+        return in_array($this->key, self::IMMEDIATE_ALARM, true) ? 0 : $configured;
+    }
+
     /** Devuelve el peor de dos valores según la regla (el más alejado del cumplimiento). */
     public function worse(float $a, float $b): float
     {

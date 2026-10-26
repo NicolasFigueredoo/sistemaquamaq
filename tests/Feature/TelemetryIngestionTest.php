@@ -61,21 +61,21 @@ class TelemetryIngestionTest extends TestCase
         [$plant, $gateway] = $this->makePlant();
         $t0 = CarbonImmutable::parse('2026-10-04 12:00:00', 'UTC');
 
-        $this->ingestor->telemetry($gateway, $this->payload($t0->getTimestampMs(), ['temperature' => 57.0]), $t0);
-        $this->assertSame(VariableState::Atencion, $this->state($plant, 'temperature')->state);
+        $this->ingestor->telemetry($gateway, $this->payload($t0->getTimestampMs(), ['ozone' => 0.45]), $t0);
+        $this->assertSame(VariableState::Atencion, $this->state($plant, 'ozone')->state);
         $this->assertSame(PlantStatus::Atencion, $plant->fresh()->status);
         $this->assertSame(0, AlarmEvent::count(), 'atención no genera evento');
 
         // Sigue fuera de parámetro 5 minutos (alarm_delay_s = 300 por defecto) → alarma.
         $t1 = $t0->addMinutes(5);
-        $this->ingestor->telemetry($gateway, $this->payload($t1->getTimestampMs(), ['temperature' => 55.5]), $t1);
-        $this->assertSame(VariableState::Alarma, $this->state($plant, 'temperature')->state);
+        $this->ingestor->telemetry($gateway, $this->payload($t1->getTimestampMs(), ['ozone' => 0.40]), $t1);
+        $this->assertSame(VariableState::Alarma, $this->state($plant, 'ozone')->state);
         $this->assertSame(PlantStatus::Alarma, $plant->fresh()->status);
         $event = AlarmEvent::sole();
         $this->assertTrue($event->started_at->equalTo($t0), 'el evento empieza cuando salió de parámetro');
         $this->assertNull($event->ended_at);
-        $this->assertEqualsWithDelta(55.5, $event->worst_value, 0.001);
-        $this->assertEqualsWithDelta(60, $event->setpoint_at_start, 0.001);
+        $this->assertEqualsWithDelta(0.40, $event->worst_value, 0.001);
+        $this->assertEqualsWithDelta(0.50, $event->setpoint_at_start, 0.001);
 
         // Vuelve a parámetro → se cierra el evento.
         $t2 = $t0->addMinutes(17);
@@ -83,8 +83,19 @@ class TelemetryIngestionTest extends TestCase
         $event->refresh();
         $this->assertTrue($event->ended_at->equalTo($t2));
         $this->assertSame(17 * 60, $event->duration_s);
-        $this->assertSame(VariableState::Ok, $this->state($plant, 'temperature')->state);
+        $this->assertSame(VariableState::Ok, $this->state($plant, 'ozone')->state);
         $this->assertSame(PlantStatus::Conforme, $plant->fresh()->status);
+    }
+
+    public function test_temperature_goes_straight_to_alarm(): void
+    {
+        [$plant, $gateway] = $this->makePlant();
+        $t0 = CarbonImmutable::parse('2026-10-04 12:00:00', 'UTC');
+
+        $this->ingestor->telemetry($gateway, $this->payload($t0->getTimestampMs(), ['temperature' => 57.0]), $t0);
+        $this->assertSame(VariableState::Alarma, $this->state($plant, 'temperature')->state);
+        $this->assertSame(PlantStatus::Alarma, $plant->fresh()->status);
+        $this->assertTrue(AlarmEvent::sole()->started_at->equalTo($t0));
     }
 
     public function test_short_deviation_never_becomes_an_event(): void

@@ -50,7 +50,7 @@ class PanelTest extends TestCase
     {
         [$plant, $gateway] = $this->makePlant();
         $now = CarbonImmutable::now()->startOfSecond();
-        app(TelemetryIngestor::class)->telemetry($gateway, $this->payload($now->getTimestampMs(), ['temperature' => 57]), $now);
+        app(TelemetryIngestor::class)->telemetry($gateway, $this->payload($now->getTimestampMs(), ['ozone' => 0.45]), $now);
 
         $this->actingAs($this->user(Role::Admin))
             ->get("/plantas/{$plant->code}")
@@ -59,7 +59,7 @@ class PanelTest extends TestCase
                 ->where('plant.status', 'atencion')
                 ->has('variables', 5)
                 ->where('banner.kind', 'warning')
-                ->where('banner.variable', 'temperature')
+                ->where('banner.variable', 'ozone')
                 ->has('chart.series.ozone', 720)
                 ->has('cip', 2)
                 ->where('can.configure', true)
