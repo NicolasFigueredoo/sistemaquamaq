@@ -126,7 +126,7 @@ const go = (url) => router.visit(url)
                 <article v-for="v in cards" :key="v.key" class="measurement">
                     <div class="label"><span class="dot" :style="{ background: dotColor(v) }"></span>{{ v.shortName }}</div>
                     <div class="value">{{ cardValue(v).unit ? `${cardValue(v).value} ` : cardValue(v).value }}<span v-if="cardValue(v).unit" class="unit">{{ cardValue(v).unit }}</span></div>
-                    <div class="target" :style="targetColor(v) ? { color: targetColor(v) } : null">{{ cardTarget(v) }}<span v-if="v.kind !== 'boolean'" class="target-unit"> {{ v.unit }}</span></div>
+                    <div class="target" :style="targetColor(v) ? { color: targetColor(v) } : null">{{ cardTarget(v) }}<span v-if="v.kind !== 'boolean'" class="target-unit">{{ ` ${v.unit}` }}</span></div>
                 </article>
             </div>
 
