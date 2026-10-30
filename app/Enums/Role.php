@@ -10,4 +10,6 @@ enum Role: string
     case Auditor = 'auditor';
     /** Ve solo sus plantas, en modo lectura. */
     case Asociado = 'asociado';
+    /** Solo el semáforo de toda la red (TV de la asociación); no entra a las plantas. */
+    case Pantalla = 'pantalla';
 }

@@ -8,6 +8,7 @@ const props = defineProps({
     plants: Array,
     summary: Object,
     updatedAt: Number,
+    canOpen: { type: Boolean, default: true },
 })
 
 const { formatClock } = useFormat()
@@ -20,7 +21,7 @@ const sorted = computed(() => [...props.plants].sort(
     (a, b) => statusRank[a.status] - statusRank[b.status] || a.name.localeCompare(b.name),
 ))
 
-const open = (plant) => router.visit(`/plantas/${plant.code}`)
+const open = (plant) => props.canOpen && router.visit(`/plantas/${plant.code}`)
 </script>
 
 <template>
@@ -28,7 +29,7 @@ const open = (plant) => router.visit(`/plantas/${plant.code}`)
     <AppLayout subtitle="Proyecto central IVESS · Vista nacional multi-HMI">
         <section id="network" class="view active">
             <div class="section-title">
-                <div><h2>ESTADO NACIONAL</h2><p>Seleccione una planta para abrir su pantalla individual.</p></div>
+                <div><h2>ESTADO NACIONAL</h2><p v-if="canOpen">Seleccione una planta para abrir su pantalla individual.</p></div>
                 <div class="update">Actualizado {{ formatClock(updatedAt) }}</div>
             </div>
             <div class="summary">
@@ -45,6 +46,7 @@ const open = (plant) => router.visit(`/plantas/${plant.code}`)
                     :key="plant.code"
                     type="button"
                     class="plant-card"
+                    :class="{ static: !canOpen }"
                     :style="{ '--state': statusColors[plant.status] }"
                     @click="open(plant)"
                 >

@@ -55,6 +55,19 @@ return [
             53292 => 'temperature', // PV Controlador 1
         ],
 
+        // Marcas CIP del PLC (1 = etapa corriendo, 0 = terminada): ioID => 'equipo.etapa'.
+        // Canales I1–I8 del módulo = M800–M807 del PLC FATEK. Completar con los ioID que da `exemys:fetch`.
+        'cip_map' => [
+            // 00000 => 'lavadora.saneado',        // I1 · M800
+            // 00000 => 'lavadora.enjuague',       // I2 · M801
+            // 00000 => 'lavadora.desinfeccion',   // I3 · M802
+            // 00000 => 'lavadora.enjuague_final', // I4 · M803
+            // 00000 => 'llenadora.saneado',       // I5 · M804
+            // 00000 => 'llenadora.enjuague',      // I6 · M805
+            // 00000 => 'llenadora.desinfeccion',  // I7 · M806
+            // 00000 => 'llenadora.enjuague_final',// I8 · M807
+        ],
+
         // Días de histórico a traer la primera vez (después solo trae lo nuevo).
         'backfill_days' => (int) env('EXEMYS_BACKFILL_DAYS', 30),
     ],
@@ -70,6 +83,8 @@ return [
         'expired_plant_status' => env('TELEMETRY_CIP_EXPIRED_STATUS', 'alarma'),
         // Si un equipo nunca informó un CIP, ¿pone la planta en atención?
         'missing_is_attention' => filter_var(env('TELEMETRY_CIP_MISSING_ATTENTION', false), FILTER_VALIDATE_BOOL),
+        // Un ciclo armado desde las marcas del PLC sin ninguna etapa activa durante estos minutos se cierra incompleto.
+        'stale_minutes' => (int) env('TELEMETRY_CIP_STALE_MINUTES', 120),
     ],
 
     'panel' => [

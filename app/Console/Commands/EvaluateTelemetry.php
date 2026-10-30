@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\Gateway;
 use App\Models\Plant;
+use App\Services\Telemetry\CipService;
 use App\Services\Telemetry\GatewayPresence;
 use App\Services\Telemetry\PlantStatusService;
 use Carbon\CarbonImmutable;
@@ -13,9 +14,9 @@ class EvaluateTelemetry extends Command
 {
     protected $signature = 'telemetry:evaluate';
 
-    protected $description = 'Marca gateways sin conexión, evalúa vencimientos CIP y recalcula el estado de cada planta (correr cada minuto).';
+    protected $description = 'Marca gateways sin conexión, cierra ciclos CIP abandonados, evalúa vencimientos y recalcula el estado de cada planta (correr cada minuto).';
 
-    public function handle(GatewayPresence $presence, PlantStatusService $status): int
+    public function handle(GatewayPresence $presence, PlantStatusService $status, CipService $cip): int
     {
         $now = CarbonImmutable::now();
         $offline = 0;
@@ -28,6 +29,8 @@ class EvaluateTelemetry extends Command
             }
         });
 
+        $stale = $cip->closeStale($now);
+
         $changed = 0;
         Plant::query()->where('active', true)->each(function (Plant $plant) use ($status, $now, &$changed) {
             $before = $plant->status;
@@ -36,7 +39,7 @@ class EvaluateTelemetry extends Command
             }
         });
 
-        $this->info("Gateways marcados sin conexión: {$offline} · Plantas con cambio de estado: {$changed}");
+        $this->info("Gateways marcados sin conexión: {$offline} · Ciclos CIP abandonados cerrados: {$stale} · Plantas con cambio de estado: {$changed}");
 
         return self::SUCCESS;
     }

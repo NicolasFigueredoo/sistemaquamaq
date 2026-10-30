@@ -55,7 +55,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
             </div>
             <div class="config-grid">
                 <label class="field"><span>{{ ozone?.name ?? 'Ozono en llenadora' }}</span><input id="ozone-setpoint-input" ref="firstInput" v-model="form.setpoints.ozone" type="number" :min="ozone?.setpointMin ?? 0" :max="ozone?.setpointMax ?? 100" step="0.01" required><small>{{ ozone?.unit ?? 'ppm' }}</small></label>
-                <label class="field"><span>{{ temperature?.name ?? 'Temperatura de lavado' }}</span><input id="temperature-setpoint-input" v-model="form.setpoints.temperature" type="number" :min="temperature?.setpointMin ?? 0" :max="temperature?.setpointMax ?? 100" step="0.5" required><small>{{ temperature?.unit ?? '°C' }}</small></label>
+                <label class="field"><span>{{ temperature?.name ?? 'Temperatura de lavado' }}</span><input id="temperature-setpoint-input" v-model="form.setpoints.temperature" type="number" :min="temperature?.setpointMin ?? 0" :max="temperature?.setpointMax ?? 100" step="0.1" required><small>{{ temperature?.unit ?? '°C' }}</small></label>
                 <label class="field"><span>{{ alkaline?.name ?? 'Producto alcalino' }}</span><input id="alkaline-setpoint-input" v-model="form.setpoints.alkaline" type="number" :min="alkaline?.setpointMin ?? 0" :max="alkaline?.setpointMax ?? 20000" step="1" required><small>{{ alkaline?.unit ?? 'µS/cm' }}</small></label>
                 <label class="field"><span>Periodicidad CIP</span><input id="period-days-input" v-model="form.cip_period_days" type="number" min="1" max="30" step="1" required><small>días desde el último ciclo completo</small></label>
             </div>

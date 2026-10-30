@@ -7,6 +7,7 @@ use App\Models\Plant;
 use App\Models\PlantSetpoint;
 use App\Models\Variable;
 use App\Services\Exemys\ExemysClient;
+use App\Services\Telemetry\CipService;
 use App\Services\Telemetry\GatewayPresence;
 use App\Services\Telemetry\PlantStatusService;
 use App\Services\Telemetry\TelemetryIngestor;
@@ -18,6 +19,8 @@ use Throwable;
 /**
  * Trae los datos de la unidad Exemys y los guarda como lecturas de su planta, por el mismo
  * TelemetryIngestor que usan los gateways MQTT (alarmas, promedios horarios y estado incluidos).
+ *
+ * Los canales de cip_map son las marcas de etapa del PLC: cada cambio 0/1 alimenta CipService::signal().
  *
  * Cada corrida: histórico desde la última lectura (la primera vez, EXEMYS_BACKFILL_DAYS días)
  * + valor actual. Pensado para correr cada minuto desde el scheduler.
@@ -32,13 +35,14 @@ class SyncExemys extends Command
 
     protected $description = 'Sincroniza la unidad Exemys M2M con su planta del panel.';
 
-    public function handle(TelemetryIngestor $ingestor, GatewayPresence $presence, PlantStatusService $status): int
+    public function handle(TelemetryIngestor $ingestor, GatewayPresence $presence, PlantStatusService $status, CipService $cip): int
     {
         $cfg = config('telemetry.exemys');
         $unitId = (int) ($this->option('unit') ?: $cfg['unit_id']);
         $map = $cfg['io_map'];
+        $cipMap = $cfg['cip_map'] ?? [];
 
-        if ($unitId <= 0 || ! $map) {
+        if ($unitId <= 0 || (! $map && ! $cipMap)) {
             $this->error('Falta EXEMYS_UNIT_ID o el mapeo de canales (telemetry.exemys.io_map).');
 
             return self::FAILURE;
@@ -59,7 +63,9 @@ class SyncExemys extends Command
 
             $history = $client->historyValues($unitId, $since, $now);
             $records = [];
+            $cipChanges = 0;
             foreach ($history['records'] as $row) {
+                $cipChanges += $this->cipSignals($cip, $gateway, $row['values'], $cipMap, $row['date'], $row['flagged']);
                 // "*" = registro todavía abierto en Exemys: se toma en la próxima corrida.
                 $values = $this->mapValues($row['values'], $map, $row['flagged']);
                 if ($values) {
@@ -71,9 +77,16 @@ class SyncExemys extends Command
             // ── Valor actual ──
             $current = $client->currentValues($unitId);
             if ($current['online']) {
-                $values = $this->mapValues(array_column($current['ios'], 'value', 'id'), $map);
+                $byIo = array_column($current['ios'], 'value', 'id');
+                $at = $now->subSeconds($this->seconds($current['last_report']));
+                $cipChanges += $this->cipSignals($cip, $gateway, $byIo, $cipMap, $at);
+                $values = $this->mapValues($byIo, $map);
                 if ($values) {
-                    $saved += $ingestor->telemetry($gateway, ['ts' => $now->subSeconds($this->seconds($current['last_report']))->toIso8601String(), 'values' => $values], $now);
+                    $saved += $ingestor->telemetry($gateway, ['ts' => $at->toIso8601String(), 'values' => $values], $now);
+                }
+                if ($cipChanges) {
+                    $presence->seen($gateway->refresh(), $now);
+                    $status->refresh($gateway->plant, $now);
                 }
             } else {
                 $presence->offline($gateway->refresh(), $now->subSeconds($this->seconds($current['last_report'])));
@@ -86,8 +99,8 @@ class SyncExemys extends Command
         }
 
         $this->info(sprintf(
-            '%s: %d registros históricos, %d lecturas nuevas · equipo %s',
-            $gateway->plant->name, count($records), $saved, $current['online'] ? 'en línea' : 'desconectado',
+            '%s: %d registros históricos, %d lecturas nuevas, %d cambios de etapa CIP · equipo %s',
+            $gateway->plant->name, count($records), $saved, $cipChanges, $current['online'] ? 'en línea' : 'desconectado',
         ));
 
         return self::SUCCESS;
@@ -127,6 +140,21 @@ class SyncExemys extends Command
         }
 
         return $out;
+    }
+
+    /** @return int cuántas marcas cambiaron algún ciclo */
+    private function cipSignals(CipService $cip, Gateway $gateway, array $byIo, array $cipMap, CarbonImmutable $at, array $skip = []): int
+    {
+        $changes = 0;
+        foreach ($cipMap as $ioId => $target) {
+            if (! isset($byIo[$ioId]) || in_array($ioId, $skip, true)) {
+                continue;
+            }
+            [$equipment, $stage] = explode('.', $target, 2);
+            $changes += (int) $cip->signal($gateway, $equipment, $stage, $byIo[$ioId] >= 0.5, $at);
+        }
+
+        return $changes;
     }
 
     private function seconds(string $hms): int

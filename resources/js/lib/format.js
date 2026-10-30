@@ -39,7 +39,9 @@ export function useFormat() {
     }
 
     const formatDuration = (seconds) => {
-        const minutes = Math.max(0, Math.round((seconds || 0) / 60))
+        const s = Math.max(0, Math.round(seconds || 0))
+        if (s < 60) return `${s} s`
+        const minutes = Math.round(s / 60)
         if (minutes < 60) return `${minutes} min`
         const h = Math.floor(minutes / 60)
         const m = minutes % 60

@@ -83,6 +83,18 @@ class PanelTest extends TestCase
         $this->actingAs($user)->post("/plantas/{$own->code}/notas", ['body' => 'x'])->assertForbidden();
     }
 
+    public function test_pantalla_sees_network_but_cannot_open_plants(): void
+    {
+        [$plant] = $this->makePlant('Única', 'GW-1');
+        $user = $this->user(Role::Pantalla);
+
+        $this->actingAs($user)->get('/')
+            ->assertInertia(fn (Assert $p) => $p->component('Network')->where('canOpen', false)->where('summary.total', 1));
+        $this->actingAs($user)->get("/plantas/{$plant->code}")->assertForbidden();
+        $this->actingAs($user)->get("/plantas/{$plant->code}/cip")->assertForbidden();
+        $this->actingAs($user)->post("/plantas/{$plant->code}/notas", ['body' => 'x'])->assertForbidden();
+    }
+
     public function test_admin_updates_setpoints_and_current_value_is_rejudged(): void
     {
         [$plant, $gateway] = $this->makePlant();

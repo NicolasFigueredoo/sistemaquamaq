@@ -81,6 +81,7 @@ const bannerClass = computed(() => ({ alarm: props.banner?.kind === 'alarm', off
 
 // Control semanal CIP (columna derecha)
 const cipLine = (c) => {
+    if (c.running) return `En curso · ${c.running.label} desde ${formatShort(c.running.since)}`
     if (c.status === 'sin_registro') return 'Sin ciclos registrados'
     if (c.status === 'proximo') return `Próximo: ${formatShort(c.dueAt)}`
     if (c.status === 'vencido') return `Venció: ${formatShort(c.dueAt)}`

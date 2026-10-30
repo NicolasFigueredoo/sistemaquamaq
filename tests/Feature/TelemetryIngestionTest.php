@@ -11,6 +11,7 @@ use App\Models\Gateway;
 use App\Models\MqttInbox;
 use App\Models\PlantVariableState;
 use App\Models\Variable;
+use App\Services\Telemetry\CipService;
 use App\Services\Telemetry\PayloadParser;
 use App\Services\Telemetry\TelemetryIngestor;
 use Carbon\CarbonImmutable;
@@ -190,6 +191,93 @@ class TelemetryIngestionTest extends TestCase
         $this->travelTo($now->addDays(6));
         $this->artisan('telemetry:evaluate');
         $this->assertSame(PlantStatus::Alarma, $plant->fresh()->status);
+    }
+
+    public function test_plc_stage_marks_build_cip_cycles(): void
+    {
+        [$plant, $gateway] = $this->makePlant();
+        $cip = app(CipService::class);
+        $t = CarbonImmutable::now()->startOfMinute()->subHour();
+        $mark = fn (string $stage, int $on, int $minute, string $equipment = 'lavadora') => $cip->signal($gateway, $equipment, $stage, (bool) $on, $t->addMinutes($minute));
+
+        // Primera muestra de cada marca: solo toma el estado.
+        foreach (CipCycle::STAGES as $stage) {
+            $this->assertFalse($mark($stage, 0, 0));
+        }
+
+        $mark('saneado', 1, 1);
+        $this->assertSame(CipService::RUNNING, CipCycle::sole()->result);
+        $this->assertFalse($mark('saneado', 1, 2), 'mismo estado');
+        $this->assertFalse($mark('saneado', 0, 1), 'muestra vieja');
+
+        $mark('saneado', 0, 4);
+        $mark('enjuague', 1, 4);
+        $mark('enjuague', 0, 7);
+        $mark('desinfeccion', 1, 7);
+        $mark('desinfeccion', 0, 10);
+        $mark('enjuague_final', 1, 10);
+        $mark('enjuague_final', 0, 13);
+
+        $cycle = CipCycle::with('stages')->sole();
+        $this->assertSame('finalizado', $cycle->result);
+        $this->assertSame(12, $cycle->total_min);
+        $this->assertSame([3, 3, 3, 3], $cycle->stages->pluck('duration_min')->all());
+        $this->assertTrue($t->addMinutes(13)->equalTo($cycle->finished_at));
+
+        // Sin desinfección → incompleto; un saneado nuevo con un ciclo abierto lo cierra incompleto.
+        $mark('saneado', 1, 20);
+        $mark('saneado', 0, 23);
+        $mark('enjuague', 1, 23);
+        $mark('enjuague', 0, 26);
+        $mark('saneado', 1, 30);
+        $previous = CipCycle::where('started_at', $t->addMinutes(20))->sole();
+        $this->assertSame('incompleto', $previous->result);
+        $this->assertSame(6, $previous->total_min);
+        $this->assertSame(CipService::RUNNING, CipCycle::latest('id')->first()->result);
+
+        $mark('saneado', 0, 33);
+        $this->assertSame(0, $cip->closeStale($t->addMinutes(60)), 'todavía no pasaron 2 h');
+        $this->assertSame(1, $cip->closeStale($t->addMinutes(33 + 121)));
+        $this->assertSame(0, CipCycle::where('result', CipService::RUNNING)->count());
+        $this->assertSame(1, CipCycle::where('result', 'finalizado')->count());
+    }
+
+    public function test_exemys_sync_reads_plc_stage_marks(): void
+    {
+        $this->seed(\Database\Seeders\VariableSeeder::class);
+        $this->travelTo(CarbonImmutable::parse('2026-10-30 13:30:00', 'UTC'));
+        config([
+            'telemetry.exemys.unit_id' => 77,
+            'telemetry.exemys.username' => 'u',
+            'telemetry.exemys.password' => 'p',
+            'telemetry.exemys.io_map' => [],
+            'telemetry.exemys.cip_map' => [1 => 'lavadora.saneado', 2 => 'lavadora.enjuague', 3 => 'lavadora.desinfeccion', 4 => 'lavadora.enjuague_final'],
+        ]);
+
+        // Un registro por minuto desde las 10:00 (hora de Exemys), 3 minutos por etapa.
+        $records = [];
+        for ($m = 0; $m <= 14; $m++) {
+            $active = $m >= 1 && $m < 13 ? intdiv($m - 1, 3) : null;
+            $values = array_map(fn ($i) => $i === $active ? '1' : '0', range(0, 3));
+            $records[] = ['date' => sprintf('2026-10-30 10:%02d:00', $m), 'values' => implode(',', $values)];
+        }
+        $ios = array_map(fn ($id) => ['id' => $id, 'desc' => "I{$id}", 'unit' => ''], [1, 2, 3, 4]);
+        \Illuminate\Support\Facades\Http::fake([
+            '*historyValues.php*' => ['unitID' => 77, 'unitDesc' => 'GRD', 'ios' => $ios, 'records' => $records],
+            '*currentValues.php*' => ['unitID' => 77, 'unitDesc' => 'GRD', 'linkState' => 1, 'lastReport' => '00:00:10',
+                'ios' => array_map(fn ($io) => $io + ['val' => '0'], $ios)],
+        ]);
+
+        $this->artisan('exemys:sync')->assertSuccessful();
+
+        $cycle = CipCycle::with('stages')->sole();
+        $this->assertSame('finalizado', $cycle->result);
+        $this->assertSame([3, 3, 3, 3], $cycle->stages->pluck('duration_min')->all());
+        $this->assertSame('2026-10-30 13:13:00', $cycle->finished_at->utc()->format('Y-m-d H:i:s'));
+
+        // La corrida siguiente vuelve a traer la misma hora: no duplica nada.
+        $this->artisan('exemys:sync')->assertSuccessful();
+        $this->assertSame(1, CipCycle::count());
     }
 
     public function test_mqtt_messages_are_logged_and_routed_by_topic(): void

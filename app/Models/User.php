@@ -41,6 +41,11 @@ class User extends Authenticatable
         return in_array($this->role, [Role::Admin, Role::Auditor], true);
     }
 
+    public function isScreen(): bool
+    {
+        return $this->role === Role::Pantalla;
+    }
+
     public function canWriteNotes(): bool
     {
         return in_array($this->role, [Role::Admin, Role::Auditor], true);
@@ -48,13 +53,13 @@ class User extends Authenticatable
 
     public function canSeePlant(Plant $plant): bool
     {
-        return $this->seesAllPlants() || $this->plants()->whereKey($plant->id)->exists();
+        return ! $this->isScreen() && ($this->seesAllPlants() || $this->plants()->whereKey($plant->id)->exists());
     }
 
     /** Plantas visibles para este usuario. */
     public function visiblePlants()
     {
-        return $this->seesAllPlants()
+        return $this->seesAllPlants() || $this->isScreen()
             ? Plant::query()->where('active', true)
             : $this->plants()->where('active', true)->getQuery();
     }

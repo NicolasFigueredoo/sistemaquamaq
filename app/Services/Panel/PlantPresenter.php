@@ -120,9 +120,11 @@ class PlantPresenter
     {
         $settings = $plant->settingsOrDefault();
         $equipment = $plant->equipment()->with('lastCompleteCycle')->orderBy('type')->get();
+        $running = $this->cip->running($equipment->pluck('id')->all());
 
-        return $equipment->map(function ($e) use ($settings, $now) {
+        return $equipment->map(function ($e) use ($settings, $now, $running) {
             $s = $this->cip->statusFor($e, $settings, $now);
+            $r = $running[$e->id] ?? null;
 
             return [
                 'type' => $e->type,
@@ -131,6 +133,7 @@ class PlantPresenter
                 'statusLabel' => $s['status']->label(),
                 'lastCompleteAt' => self::ms($s['last_complete_at']),
                 'dueAt' => self::ms($s['due_at']),
+                'running' => $r ? ['label' => CipCycle::STAGE_LABELS[$r['stage']], 'since' => self::ms($r['since'])] : null,
             ];
         })->values()->all();
     }

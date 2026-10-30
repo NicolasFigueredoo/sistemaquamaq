@@ -15,7 +15,7 @@ class NetworkController extends Controller
         $plants = $user->visiblePlants()->orderBy('name')->get(['id', 'code', 'name', 'location', 'status']);
 
         // Un asociado con una sola planta va directo a su pantalla.
-        if (! $user->seesAllPlants() && $plants->count() === 1) {
+        if (! $user->seesAllPlants() && ! $user->isScreen() && $plants->count() === 1) {
             return redirect()->route('plants.show', $plants->first()->code);
         }
 
@@ -32,6 +32,7 @@ class NetworkController extends Controller
             ])->values(),
             'summary' => ['total' => $plants->count()] + $counts->all(),
             'updatedAt' => CarbonImmutable::now()->getTimestampMs(),
+            'canOpen' => ! $user->isScreen(),
         ]);
     }
 }

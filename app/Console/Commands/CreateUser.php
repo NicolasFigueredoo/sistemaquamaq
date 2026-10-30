@@ -9,7 +9,7 @@ use Illuminate\Console\Command;
 
 class CreateUser extends Command
 {
-    protected $signature = 'ivess:user {username} {--name=} {--role=asociado : admin | auditor | asociado} {--plant=* : código de planta (asociados)} {--password=}';
+    protected $signature = 'ivess:user {username} {--name=} {--role=asociado : admin | auditor | asociado | pantalla} {--plant=* : código de planta (asociados)} {--password=}';
 
     protected $description = 'Crea o actualiza un usuario del panel.';
 
@@ -17,7 +17,7 @@ class CreateUser extends Command
     {
         $role = Role::tryFrom($this->option('role'));
         if (! $role) {
-            $this->error('Rol inválido. Usá admin, auditor o asociado.');
+            $this->error('Rol inválido. Usá admin, auditor, asociado o pantalla.');
 
             return self::FAILURE;
         }
