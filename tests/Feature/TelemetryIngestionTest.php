@@ -280,6 +280,25 @@ class TelemetryIngestionTest extends TestCase
         $this->assertSame(1, CipCycle::count());
     }
 
+    public function test_simulator_feeds_exemys_plant_with_plc_marks(): void
+    {
+        [$plant, $gateway] = $this->makePlant(serial: 'EXEMYS-77');
+        $gateway->update(['model' => \App\Console\Commands\SyncExemys::GATEWAY_MODEL]);
+        // 11:30 UTC arranca un ciclo de lavadora completo; el de las 12:00 es el que saltea la desinfección.
+        $start = CarbonImmutable::parse('2026-11-03 11:30:00', 'UTC');
+
+        for ($m = -1; $m <= 43; $m++) {
+            $this->travelTo($start->addMinutes($m));
+            $this->artisan('telemetry:simulate', ['--exemys' => true])->assertSuccessful();
+        }
+
+        $cycles = CipCycle::with('stages')->whereHas('equipment', fn ($q) => $q->where('type', 'lavadora'))->orderBy('started_at')->get();
+        $this->assertSame(['finalizado', 'incompleto'], $cycles->pluck('result')->all());
+        $this->assertSame([3, 3, 3, 3], $cycles[0]->stages->pluck('duration_min')->all());
+        $this->assertGreaterThan(0, DB::table('readings')->where('plant_id', $plant->id)->count());
+        $this->assertTrue($gateway->fresh()->online);
+    }
+
     public function test_mqtt_messages_are_logged_and_routed_by_topic(): void
     {
         [$plant, $gateway] = $this->makePlant(serial: 'EM300-0099');

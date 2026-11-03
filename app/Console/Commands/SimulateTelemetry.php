@@ -2,11 +2,13 @@
 
 namespace App\Console\Commands;
 
+use App\Models\CipCycle;
 use App\Models\Equipment;
 use App\Models\Gateway;
 use App\Models\PlantSetpoint;
 use App\Models\Variable;
 use App\Services\Telemetry\CipService;
+use App\Services\Telemetry\PlantStatusService;
 use App\Services\Telemetry\TelemetryIngestor;
 use App\Support\DemoSignals;
 use Carbon\CarbonImmutable;
@@ -18,6 +20,9 @@ use PhpMqtt\Client\MqttClient;
 /**
  * Simula los EM300 para probar sin hardware. Por defecto escribe directo en la base
  * (mismo código que usa el ingestor); con --mqtt publica al broker como lo haría un gateway real.
+ *
+ * Con --exemys simula solo la planta de Exemys mientras el módulo no lee los equipos: variables y
+ * marcas de etapa CIP del PLC (3 minutos por etapa, un ciclo cada media hora por equipo).
  */
 class SimulateTelemetry extends Command
 {
@@ -26,16 +31,19 @@ class SimulateTelemetry extends Command
         {--interval=10 : Segundos entre envíos}
         {--plant=* : Solo estas plantas (código)}
         {--except=* : Plantas a dejar "sin conexión" (por defecto las dos de la demo)}
-        {--mqtt : Publicar al broker en lugar de escribir directo}';
+        {--mqtt : Publicar al broker en lugar de escribir directo}
+        {--exemys : Simular la planta de Exemys (variables + marcas CIP del PLC)}';
 
     protected $description = 'Genera telemetría de prueba para las plantas (demo sin gateways reales).';
 
     public function handle(TelemetryIngestor $ingestor, CipService $cip): int
     {
+        $exemys = (bool) $this->option('exemys');
         $except = $this->option('except') ?: ['2-vascos-srl', 'ruben-omar-meder'];
         $gateways = Gateway::query()
             ->with('plant.settings')
-            ->where('model', '!=', SyncExemys::GATEWAY_MODEL) // la planta de Exemys tiene datos reales
+            // La planta de Exemys tiene datos reales: solo se simula si se pide explícitamente.
+            ->where('model', $exemys ? '=' : '!=', SyncExemys::GATEWAY_MODEL)
             ->whereHas('plant', function ($q) use ($except) {
                 $q->where('active', true)->whereNotIn('code', $except);
                 if ($codes = $this->option('plant')) {
@@ -51,7 +59,7 @@ class SimulateTelemetry extends Command
             return self::FAILURE;
         }
 
-        $mqtt = $this->option('mqtt') ? $this->connect() : null;
+        $mqtt = $this->option('mqtt') && ! $exemys ? $this->connect() : null;
         $variables = Variable::catalog();
         $interval = max(1, (int) $this->option('interval'));
 
@@ -65,6 +73,12 @@ class SimulateTelemetry extends Command
                     $mqtt->publish("{$prefix}/{$gateway->serial}/telemetry", $payload, 1);
                 } else {
                     $ingestor->telemetry($gateway->fresh(), $payload, $now);
+                }
+
+                if ($exemys) {
+                    $this->plcMarks($gateway, $cip, $now);
+
+                    continue;
                 }
 
                 foreach ($this->dueCip($gateway, $cip, $now) as $cycle) {
@@ -140,6 +154,30 @@ class SimulateTelemetry extends Command
         }
 
         return $cycles;
+    }
+
+    /**
+     * Marcas de etapa como las deja ciclando Matías en el PLC: cada equipo corre un ciclo cada 30 minutos
+     * (llenadora desfasada 15), 3 minutos por etapa. Uno de cada cinco ciclos saltea la desinfección (incompleto).
+     */
+    private function plcMarks(Gateway $gateway, CipService $cip, CarbonImmutable $now): void
+    {
+        $minute = intdiv($now->getTimestamp(), 60);
+
+        foreach (['lavadora' => 0, 'llenadora' => 15] as $equipment => $offset) {
+            $m = $minute + $offset;
+            $inCycle = $m % 30;
+            $active = $inCycle < 12 ? intdiv($inCycle, 3) : null;
+            if ($active === 2 && intdiv($m, 30) % 5 === 4) {
+                $active = null;
+            }
+
+            foreach (CipCycle::STAGES as $i => $stage) {
+                $cip->signal($gateway, $equipment, $stage, $i === $active, $now);
+            }
+        }
+
+        app(PlantStatusService::class)->refresh($gateway->plant, $now);
     }
 
     private function connect(): MqttClient

@@ -156,6 +156,12 @@ class ExemysClient
             ->retry(2, 1000, throw: false);
     }
 
+    /**
+     * Valor que pone el módulo cuando no pudo leer el equipo por Modbus: el máximo de un entero
+     * de 32 bits (2147483647), a veces escalado (214748364.7). Se trata como "sin dato".
+     */
+    private const READ_ERROR = 214748364;
+
     /** @return array{0: ?float, 1: bool} valor y si venía marcado con "*" */
     private function number(mixed $raw): array
     {
@@ -163,6 +169,10 @@ class ExemysClient
         $flag = str_ends_with($raw, '*');
         $raw = rtrim($raw, '*');
 
-        return [is_numeric($raw) ? (float) $raw : null, $flag];
+        if (! is_numeric($raw) || abs((float) $raw) >= self::READ_ERROR) {
+            return [null, $flag];
+        }
+
+        return [(float) $raw, $flag];
     }
 }

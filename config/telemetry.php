@@ -68,6 +68,9 @@ return [
             // 00000 => 'llenadora.enjuague_final',// I8 · M807
         ],
 
+        // Mientras el módulo no lee los equipos: el scheduler simula la planta (`telemetry:simulate --exemys`) en lugar de sincronizar.
+        'simulate' => filter_var(env('EXEMYS_SIMULATE', false), FILTER_VALIDATE_BOOL),
+
         // Días de histórico a traer la primera vez (después solo trae lo nuevo).
         'backfill_days' => (int) env('EXEMYS_BACKFILL_DAYS', 30),
     ],

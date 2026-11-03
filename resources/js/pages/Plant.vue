@@ -53,7 +53,10 @@ function cardValue(v) {
 
 function cardTarget(v) {
     const sp = formatComma(v.setpoint, v.decimals)
-    if (v.kind === 'boolean') return v.value == null || v.value >= 0.5 ? 'Presencia confirmada' : 'Presencia no detectada'
+    if (v.kind === 'boolean') {
+        if (v.value == null) return 'Sin dato'
+        return v.value >= 0.5 ? 'Presencia confirmada' : 'Presencia no detectada'
+    }
     if (v.key === 'effective_time') return `Objetivo ${sp}`
     return `${v.rule === 'max' ? 'Máximo permitido' : 'Mínimo requerido'} ${sp}`
 }
