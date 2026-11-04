@@ -31,6 +31,11 @@ class VariableSeeder extends Seeder
                 'unit' => '', 'decimals' => 0, 'kind' => 'boolean', 'rule' => 'presence', 'default_setpoint' => 1,
                 'setpoint_min' => null, 'setpoint_max' => null, 'chart_min' => null, 'chart_max' => null,
                 'chart_color' => null, 'sort' => 5, 'chart_sort' => null],
+            // Mínimo por desinfección, máximo porque por arriba transfiere gusto: alarma por baja o por alta.
+            ['key' => 'chlorine_dioxide', 'name' => 'Dióxido de cloro', 'short_name' => 'Dióxido de cloro', 'alert_name' => 'Dióxido de cloro',
+                'unit' => 'ppm', 'decimals' => 2, 'kind' => 'analog', 'rule' => 'range', 'default_setpoint' => 0.20, 'default_setpoint_high' => 0.80,
+                'setpoint_min' => 0, 'setpoint_max' => 100, 'chart_min' => 0, 'chart_max' => 1,
+                'chart_color' => '#2f9e6e', 'sort' => 6, 'chart_sort' => 4],
         ];
 
         foreach ($rows as $row) {

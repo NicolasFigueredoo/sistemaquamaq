@@ -58,6 +58,7 @@ function cardTarget(v) {
         return v.value >= 0.5 ? 'Presencia confirmada' : 'Presencia no detectada'
     }
     if (v.key === 'effective_time') return `Objetivo ${sp}`
+    if (v.rule === 'range') return `Rango ${sp} a ${formatComma(v.setpointHigh, v.decimals)}`
     return `${v.rule === 'max' ? 'Máximo permitido' : 'Mínimo requerido'} ${sp}`
 }
 
@@ -71,6 +72,10 @@ const bannerText = computed(() => {
     if (b.variable) {
         const v = byKey.value[b.variable]
         if (v.kind === 'boolean') return `${label} · Fuera de parámetro: ${v.alertName} no detectado · Valor configurado: presencia obligatoria.`
+        if (v.rule === 'range') {
+            const high = v.setpointHigh != null && v.value > v.setpointHigh
+            return `${label} · Fuera de parámetro por ${high ? 'alta' : 'baja'}: ${v.alertName} ${formatComma(v.value, v.decimals)} ${v.unit} · Rango configurado: ${formatComma(v.setpoint, v.decimals)} a ${formatComma(v.setpointHigh, v.decimals)} ${v.unit}.`
+        }
         const limit = v.rule === 'max' ? 'máximo' : 'mínimo'
         return `${label} · Fuera de parámetro: ${v.alertName} ${formatComma(v.value, v.decimals)} ${v.unit} · Valor configurado: ${limit} ${formatComma(v.setpoint, v.decimals)} ${v.unit}.`
     }
@@ -140,6 +145,7 @@ const go = (url) => router.visit(url)
                     :key="v.key"
                     :variable="v"
                     :setpoint="v.setpoint"
+                    :setpoint-high="v.rule === 'range' ? v.setpointHigh : null"
                     :ranges="chart.ranges"
                 />
                 <aside class="panel">

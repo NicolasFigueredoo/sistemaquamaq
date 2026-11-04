@@ -58,6 +58,7 @@ class PlantPresenter
                 'kind' => $v->kind,
                 'rule' => $v->rule,
                 'setpoint' => $setpoints[$v->id]->setpoint,
+                'setpointHigh' => $setpoints[$v->id]->setpoint_high,
                 'setpointMin' => $v->setpoint_min,
                 'setpointMax' => $v->setpoint_max,
                 'chartMin' => $v->chart_min,

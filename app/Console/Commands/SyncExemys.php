@@ -121,7 +121,7 @@ class SyncExemys extends Command
         );
         $plant->settingsOrDefault();
         foreach (Variable::all() as $v) {
-            PlantSetpoint::firstOrCreate(['plant_id' => $plant->id, 'variable_id' => $v->id], ['setpoint' => $v->default_setpoint]);
+            PlantSetpoint::firstOrCreate(['plant_id' => $plant->id, 'variable_id' => $v->id], ['setpoint' => $v->default_setpoint, 'setpoint_high' => $v->default_setpoint_high]);
         }
 
         $this->info("Planta creada: {$plant->name} (/plantas/{$plant->code})");

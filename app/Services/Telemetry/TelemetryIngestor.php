@@ -169,6 +169,7 @@ class TelemetryIngestor
                 'plant_id' => $plantId,
                 'variable_id' => $variable->id,
                 'setpoint' => $variable->default_setpoint,
+                'setpoint_high' => $variable->default_setpoint_high,
             ])->refresh();
         }
 

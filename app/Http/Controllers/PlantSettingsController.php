@@ -31,12 +31,18 @@ class PlantSettingsController extends Controller
         $rules = [
             'cip_period_days' => ['required', 'integer', 'min:1', 'max:30'],
         ];
+        $ranged = $editable->where('rule', 'range');
         foreach ($editable as $v) {
             $rules["setpoints.{$v->key}"] = ['required', 'numeric', "min:{$v->setpoint_min}", "max:{$v->setpoint_max}"];
         }
+        // Variables con rango: el setpoint es el mínimo y setpoints_high el máximo.
+        foreach ($ranged as $v) {
+            $rules["setpoints_high.{$v->key}"] = ['required', 'numeric', "max:{$v->setpoint_max}", "gt:setpoints.{$v->key}"];
+        }
         $data = $request->validate($rules, [], [
             'cip_period_days' => 'periodicidad CIP',
-        ] + $editable->mapWithKeys(fn ($v) => ["setpoints.{$v->key}" => mb_strtolower($v->name)])->all());
+        ] + $editable->mapWithKeys(fn ($v) => ["setpoints.{$v->key}" => mb_strtolower($v->name).($v->rule === 'range' ? ' (mínimo)' : '')])->all()
+          + $ranged->mapWithKeys(fn ($v) => ["setpoints_high.{$v->key}" => mb_strtolower($v->name).' (máximo)'])->all());
 
         $now = CarbonImmutable::now();
         $userId = $request->user()->id;
@@ -57,11 +63,20 @@ class PlantSettingsController extends Controller
             foreach ($editable as $v) {
                 $sp = $setpoints[$v->id];
                 $new = round((float) $data['setpoints'][$v->key], 4);
-                if (abs($sp->setpoint - $new) < 0.00001) {
+                $newHigh = isset($data['setpoints_high'][$v->key]) ? round((float) $data['setpoints_high'][$v->key], 4) : $sp->setpoint_high;
+                $lowChanged = abs($sp->setpoint - $new) >= 0.00001;
+                $highChanged = abs(($sp->setpoint_high ?? 0) - ($newHigh ?? 0)) >= 0.00001;
+                if (! $lowChanged && ! $highChanged) {
                     continue;
                 }
-                $changes[] = [$v->key, $sp->setpoint, $new];
+                if ($lowChanged) {
+                    $changes[] = [$v->key, $sp->setpoint, $new];
+                }
+                if ($highChanged) {
+                    $changes[] = ["{$v->key}_high", $sp->setpoint_high, $newHigh];
+                }
                 $sp->setpoint = $new;
+                $sp->setpoint_high = $newHigh;
                 $sp->updated_by = $userId;
                 $sp->save();
 

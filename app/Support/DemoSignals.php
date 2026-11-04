@@ -29,6 +29,13 @@ class DemoSignals
         return 369 + sin($i / 15) * 31.5 + sin($i / 62) * 21;
     }
 
+    public static function chlorineDioxide(float $t, int $phase): float
+    {
+        $i = $t + $phase;
+
+        return 0.5 + sin($i / 9) * 0.08 + sin($i / 41) * 0.05;
+    }
+
     /** Caídas periódicas (una hora cada tantas) para que haya cruces del setpoint. */
     public static function dip(string $key, float $t, int $phase): float
     {
@@ -50,6 +57,7 @@ class DemoSignals
             'alkaline' => self::alkaline($t, $phase),
             'effective_time' => 122 + round(sin(($t + $phase) / 5) * 1.4),
             'chlorine' => 1,
+            'chlorine_dioxide' => self::chlorineDioxide($t, $phase),
             default => 0,
         };
 

@@ -105,24 +105,31 @@ class SimulateTelemetry extends Command
     {
         $phase = $gateway->plant_id * 37;
         $t = $now->getTimestamp() / 3600;
-        $setpoints = PlantSetpoint::where('plant_id', $gateway->plant_id)->pluck('setpoint', 'variable_id');
+        $setpoints = PlantSetpoint::where('plant_id', $gateway->plant_id)->get()->keyBy('variable_id');
 
         // Cada planta tiene un desvío de 15 minutos cada 4 horas en una de las variables.
         $minute = intdiv($now->getTimestamp(), 60);
         $inDip = (($minute + $gateway->plant_id * 53) % 240) < 15;
-        $dipKey = ['ozone', 'temperature', 'alkaline'][$gateway->plant_id % 3];
-        $dipBy = ['ozone' => 0.07, 'temperature' => 4, 'alkaline' => 45];
+        $dipKey = ['ozone', 'temperature', 'alkaline', 'chlorine_dioxide'][$gateway->plant_id % 4];
+        $dipBy = ['ozone' => 0.07, 'temperature' => 4, 'alkaline' => 45, 'chlorine_dioxide' => 0.1];
+        // El dióxido de cloro tiene rango: sus desvíos alternan por baja y por alta.
+        $dipHigh = intdiv($minute + $gateway->plant_id * 53, 240) % 2 === 1;
 
         $values = [];
         foreach ($variables as $v) {
             $value = DemoSignals::value($v->key, $t, $phase, false);
-            $setpoint = (float) ($setpoints[$v->id] ?? $v->default_setpoint);
+            $setpoint = (float) ($setpoints[$v->id]->setpoint ?? $v->default_setpoint);
+            $high = $setpoints[$v->id]->setpoint_high ?? $v->default_setpoint_high;
 
-            if (in_array($v->key, ['ozone', 'temperature', 'alkaline'], true)) {
+            if (isset($dipBy[$v->key])) {
                 $value = max($value, $setpoint + $dipBy[$v->key] * 0.4);
+                if ($high !== null) {
+                    $value = min($value, $high - $dipBy[$v->key] * 0.4);
+                }
                 $value += (mt_rand(-100, 100) / 100) * $dipBy[$v->key] * 0.05;
                 if ($inDip && $v->key === $dipKey) {
-                    $value = $setpoint - $dipBy[$v->key] * (0.5 + mt_rand(0, 50) / 100);
+                    $by = $dipBy[$v->key] * (0.5 + mt_rand(0, 50) / 100);
+                    $value = $high !== null && $dipHigh ? $high + $by : $setpoint - $by;
                 }
             }
 

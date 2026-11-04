@@ -39,7 +39,7 @@ class DemoSeeder extends Seeder
         ['Industrial Gaseosa S.R.L.', 'Corrientes', 'alarm'], ['Comercial Quince S.A.', 'AMBA Sur', 'alarm'],
     ];
 
-    private const CHARTED = ['ozone', 'temperature', 'alkaline'];
+    private const CHARTED = ['ozone', 'temperature', 'alkaline', 'chlorine_dioxide'];
 
     public function run(): void
     {
@@ -85,7 +85,7 @@ class DemoSeeder extends Seeder
         PlantVariableState::where('plant_id', $plant->id)->delete();
 
         foreach ($variables as $v) {
-            PlantSetpoint::updateOrCreate(['plant_id' => $plant->id, 'variable_id' => $v->id], ['setpoint' => $v->default_setpoint, 'alarm_delay_s' => 300]);
+            PlantSetpoint::updateOrCreate(['plant_id' => $plant->id, 'variable_id' => $v->id], ['setpoint' => $v->default_setpoint, 'setpoint_high' => $v->default_setpoint_high, 'alarm_delay_s' => 300]);
         }
 
         $lastSeen = match ($scenario) {
@@ -216,7 +216,7 @@ class DemoSeeder extends Seeder
             return $setpoint - $deviation[$scenario][$key];
         }
         // Las variables sin desvío terminan dentro de parámetro.
-        $margin = ['ozone' => 0.04, 'temperature' => 1.5, 'alkaline' => 45][$key];
+        $margin = ['ozone' => 0.04, 'temperature' => 1.5, 'alkaline' => 45, 'chlorine_dioxide' => 0.1][$key];
 
         return max($value, $setpoint + $margin);
     }

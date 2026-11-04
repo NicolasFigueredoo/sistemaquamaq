@@ -7,6 +7,7 @@ import { useFormat } from '../lib/format'
 const props = defineProps({
     variable: { type: Object, required: true }, // { key, name, alertName, unit, decimals, chartColor }
     setpoint: { type: Number, required: true },
+    setpointHigh: { type: Number, default: null }, // variables con rango: segunda línea (máximo)
     ranges: { type: Object, required: true },   // { '1h': { from, to, gap, series: { key: [[ms, valor], ...] } }, ... }
 })
 
@@ -49,9 +50,9 @@ let geometry = null
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
 
 // Escala vertical: datos visibles + setpoint, con un margen. Redondea a valores "lindos".
-function scale(values, setpoint) {
-    let min = Math.min(setpoint, ...values)
-    let max = Math.max(setpoint, ...values)
+function scale(values, limits) {
+    let min = Math.min(...limits, ...values)
+    let max = Math.max(...limits, ...values)
     const span = max - min || Math.max(Math.abs(max) * 0.1, 1)
     const positive = min >= 0
     min -= span * 0.1
@@ -71,13 +72,13 @@ function render() {
     const decimals = props.variable.decimals
     const unit = props.variable.unit
     const setpoint = props.setpoint
-    const { min, max } = scale(points.map((p) => p[1]), setpoint)
+    const limits = props.setpointHigh != null ? [setpoint, props.setpointHigh] : [setpoint]
+    const { min, max } = scale(points.map((p) => p[1]), limits)
 
     const width = Math.max(320, el.clientWidth || 720)
     const left = 52, right = 20, top = 18, plotHeight = 170, plotWidth = width - left - right
     const x = (t) => left + ((t - r.from) / (r.to - r.from)) * plotWidth
     const y = (value) => top + ((max - clamp(value, min, max)) / (max - min)) * plotHeight
-    const setY = y(setpoint)
     const timeLabel = days.value <= 1 ? (t) => formatClock(t).slice(0, 5) : formatShort
 
     let markup = ''
@@ -106,24 +107,30 @@ function render() {
     if (segment.length) segments.push(segment)
 
     const crossings = []
-    for (let i = 1; i < points.length; i++) {
-        const [ta, a] = points[i - 1]
-        const [tb, b] = points[i]
-        if (tb - ta > r.gap) continue
-        if ((a < setpoint && b >= setpoint) || (a >= setpoint && b < setpoint)) {
-            const t = ta + (tb - ta) * ((setpoint - a) / (b - a))
-            crossings.push({ cx: x(t), time: t })
+    for (const limit of limits) {
+        for (let i = 1; i < points.length; i++) {
+            const [ta, a] = points[i - 1]
+            const [tb, b] = points[i]
+            if (tb - ta > r.gap) continue
+            if ((a < limit && b >= limit) || (a >= limit && b < limit)) {
+                const t = ta + (tb - ta) * ((limit - a) / (b - a))
+                crossings.push({ cx: x(t), cy: y(limit), time: t, limit })
+            }
         }
     }
+    const label = (limit) => (limits.length > 1 ? (limit === setpoint ? 'MÍNIMO' : 'MÁXIMO') : 'SETPOINT')
 
     const color = props.variable.chartColor
     const key = props.variable.key
-    markup += `<line class="trend-setpoint" x1="${left}" y1="${setY}" x2="${width - right}" y2="${setY}"/>`
-        + `<text class="trend-setpoint-label" x="${left + 8}" y="${Math.max(13, setY - 6)}">SETPOINT ${formatComma(setpoint, decimals)} ${unit}</text>`
+    markup += limits.map((limit) => {
+        const ly = y(limit)
+        return `<line class="trend-setpoint" x1="${left}" y1="${ly}" x2="${width - right}" y2="${ly}"/>`
+            + `<text class="trend-setpoint-label" x="${left + 8}" y="${Math.max(13, ly - 6)}">${label(limit)} ${formatComma(limit, decimals)} ${unit}</text>`
+    }).join('')
         + segments.map((s) => s.length === 1
             ? `<circle cx="${s[0].split(',')[0]}" cy="${s[0].split(',')[1]}" r="2" fill="${color}"/>`
             : `<polyline class="trend-path" stroke="${color}" points="${s.join(' ')}"/>`).join('')
-        + crossings.map((p) => `<circle class="trend-milestone" cx="${p.cx}" cy="${setY}" r="5"><title>${formatDateTime(p.time)} · cruce del setpoint · ${formatComma(setpoint, decimals)} ${unit}</title></circle>`).join('')
+        + crossings.map((p) => `<circle class="trend-milestone" cx="${p.cx}" cy="${p.cy}" r="5"><title>${formatDateTime(p.time)} · cruce del ${label(p.limit).toLowerCase()} · ${formatComma(p.limit, decimals)} ${unit}</title></circle>`).join('')
         + (points.length ? '' : `<text class="trend-axis" x="${left + plotWidth / 2}" y="${top + plotHeight * 0.3}" text-anchor="middle">Sin datos en este período</text>`)
         + `<line id="${key}-guide" x1="0" y1="${top}" x2="0" y2="${top + plotHeight}" stroke="#183651" stroke-width="1" opacity="0"/>`
         + `<circle id="${key}-selected" class="trend-selected" cx="0" cy="0" r="5" opacity="0"/>`
@@ -187,7 +194,7 @@ onBeforeUnmount(() => {
 })
 
 // Datos nuevos del polling o setpoint cambiado: se redibuja manteniendo el rango elegido.
-watch(() => [props.ranges, props.setpoint], render)
+watch(() => [props.ranges, props.setpoint, props.setpointHigh], render)
 </script>
 
 <template>

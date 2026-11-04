@@ -57,7 +57,7 @@ class PanelTest extends TestCase
             ->assertOk()
             ->assertInertia(fn (Assert $p) => $p->component('Plant')
                 ->where('plant.status', 'atencion')
-                ->has('variables', 5)
+                ->has('variables', 6)
                 ->where('banner.kind', 'warning')
                 ->where('banner.variable', 'ozone')
                 ->has('chart.series.ozone', 720)
@@ -103,7 +103,11 @@ class PanelTest extends TestCase
         $this->assertSame(PlantStatus::Conforme, $plant->fresh()->status);
 
         $admin = $this->user(Role::Admin);
-        $valid = ['setpoints' => ['ozone' => 0.55, 'temperature' => 60, 'alkaline' => 300], 'cip_period_days' => 5];
+        $valid = [
+            'setpoints' => ['ozone' => 0.55, 'temperature' => 60, 'alkaline' => 300, 'chlorine_dioxide' => 0.20],
+            'setpoints_high' => ['chlorine_dioxide' => 0.80],
+            'cip_period_days' => 5,
+        ];
 
         $this->actingAs($admin)->put("/plantas/{$plant->code}/configuracion", $valid)->assertRedirect();
 
@@ -118,6 +122,23 @@ class PanelTest extends TestCase
             ->assertSessionHasErrors('setpoints.ozone');
 
         $this->actingAs($this->user(Role::Auditor))->put("/plantas/{$plant->code}/configuracion", $valid)->assertForbidden();
+    }
+
+    public function test_chlorine_dioxide_range_is_configurable(): void
+    {
+        [$plant] = $this->makePlant();
+        $admin = $this->user(Role::Admin);
+        $base = ['setpoints' => ['ozone' => 0.50, 'temperature' => 60, 'alkaline' => 300], 'cip_period_days' => 7];
+        $put = fn (float $min, float $max) => $this->actingAs($admin)->put("/plantas/{$plant->code}/configuracion",
+            array_replace_recursive($base, ['setpoints' => ['chlorine_dioxide' => $min], 'setpoints_high' => ['chlorine_dioxide' => $max]]));
+
+        $put(0.30, 0.60)->assertSessionHasNoErrors();
+        $sp = \App\Models\PlantSetpoint::where('plant_id', $plant->id)->where('variable_id', Variable::where('key', 'chlorine_dioxide')->value('id'))->sole();
+        $this->assertEqualsWithDelta(0.30, $sp->setpoint, 0.0001);
+        $this->assertEqualsWithDelta(0.60, $sp->setpoint_high, 0.0001);
+        $this->assertEqualsCanonicalizing(['chlorine_dioxide', 'chlorine_dioxide_high'], SetpointChange::pluck('field')->all());
+
+        $put(0.60, 0.40)->assertSessionHasErrors('setpoints_high.chlorine_dioxide');
     }
 
     public function test_auditor_saves_notes(): void

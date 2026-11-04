@@ -16,6 +16,7 @@ use Carbon\CarbonImmutable;
  *    ▲                              │                                          │
  *    └─────────(vuelve a cumplir)───┴───────────(vuelve a cumplir)─────────────┘
  *
+ * En las variables con rango (mínimo y máximo) sale de parámetro tanto por baja como por alta.
  * Las variables de Variable::IMMEDIATE_ALARM (temperatura) no tienen atención: pasan directo a alarma.
  * Solo las alarmas quedan registradas en alarm_events, con inicio = momento en que
  * salió de parámetro y fin = momento en que se normalizó.
@@ -65,7 +66,7 @@ class VariableEvaluator
 
     private function apply(PlantVariableState $state, Variable $variable, PlantSetpoint $setpoint, float $value, CarbonImmutable $at): void
     {
-        if ($variable->complies($value, $setpoint->setpoint)) {
+        if ($variable->complies($value, $setpoint->setpoint, $setpoint->setpoint_high)) {
             if ($state->open_alarm_event_id) {
                 $event = AlarmEvent::find($state->open_alarm_event_id);
                 if ($event && $event->ended_at === null) {
@@ -87,7 +88,7 @@ class VariableEvaluator
             $state->worst_value = $value;
             $state->state = VariableState::Atencion;
         } else {
-            $state->worst_value = $variable->worse($state->worst_value ?? $value, $value);
+            $state->worst_value = $variable->worse($state->worst_value ?? $value, $value, $setpoint->setpoint, $setpoint->setpoint_high);
         }
 
         $outFor = CarbonImmutable::parse($state->out_since)->diffInSeconds($at);
@@ -99,7 +100,7 @@ class VariableEvaluator
                 'plant_id' => $state->plant_id,
                 'variable_id' => $variable->id,
                 'started_at' => $state->out_since,
-                'setpoint_at_start' => $setpoint->setpoint,
+                'setpoint_at_start' => $variable->breachedLimit($state->worst_value, $setpoint->setpoint, $setpoint->setpoint_high),
                 'worst_value' => $state->worst_value,
             ]);
             $state->open_alarm_event_id = $event->id;

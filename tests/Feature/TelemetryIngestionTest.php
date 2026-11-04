@@ -99,6 +99,36 @@ class TelemetryIngestionTest extends TestCase
         $this->assertTrue(AlarmEvent::sole()->started_at->equalTo($t0));
     }
 
+    public function test_chlorine_dioxide_alarms_below_minimum_and_above_maximum(): void
+    {
+        [$plant, $gateway] = $this->makePlant(); // rango por defecto 0,20 a 0,80 ppm, 5 min de demora
+        $t0 = CarbonImmutable::parse('2026-10-04 12:00:00', 'UTC');
+        $send = fn (int $min, float $value) => $this->ingestor->telemetry($gateway, $this->payload($t0->addMinutes($min)->getTimestampMs(), ['chlorine_dioxide' => $value]), $t0->addMinutes($min));
+
+        $send(0, 0.50);
+        $this->assertSame(VariableState::Ok, $this->state($plant, 'chlorine_dioxide')->state);
+
+        // Por alta: atención y, a los 5 minutos, alarma registrada contra el máximo.
+        $send(1, 0.95);
+        $this->assertSame(VariableState::Atencion, $this->state($plant, 'chlorine_dioxide')->state);
+        $send(6, 1.10);
+        $this->assertSame(VariableState::Alarma, $this->state($plant, 'chlorine_dioxide')->state);
+        $high = AlarmEvent::sole();
+        $this->assertEqualsWithDelta(0.80, (float) $high->setpoint_at_start, 0.0001);
+        $this->assertEqualsWithDelta(1.10, (float) $high->worst_value, 0.0001);
+
+        $send(7, 0.50);
+        $this->assertNotNull($high->fresh()->ended_at);
+
+        // Por baja: alarma registrada contra el mínimo.
+        $send(8, 0.10);
+        $send(14, 0.05);
+        $low = AlarmEvent::latest('id')->first();
+        $this->assertEqualsWithDelta(0.20, (float) $low->setpoint_at_start, 0.0001);
+        $this->assertEqualsWithDelta(0.05, (float) $low->worst_value, 0.0001);
+        $this->assertSame(PlantStatus::Alarma, $plant->fresh()->status);
+    }
+
     public function test_short_deviation_never_becomes_an_event(): void
     {
         [$plant, $gateway] = $this->makePlant();

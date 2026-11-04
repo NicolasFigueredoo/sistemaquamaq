@@ -14,12 +14,13 @@ class PlantSetpoint extends Model
 
     protected $primaryKey = 'plant_id';
 
-    protected $fillable = ['plant_id', 'variable_id', 'setpoint', 'alarm_delay_s', 'updated_by'];
+    protected $fillable = ['plant_id', 'variable_id', 'setpoint', 'setpoint_high', 'alarm_delay_s', 'updated_by'];
 
     protected function casts(): array
     {
         return [
             'setpoint' => 'float',
+            'setpoint_high' => 'float',
             'alarm_delay_s' => 'integer',
         ];
     }
