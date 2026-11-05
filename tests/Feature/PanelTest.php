@@ -61,6 +61,9 @@ class PanelTest extends TestCase
                 ->where('banner.kind', 'alarm')
                 ->where('banner.variable', 'ozone')
                 ->has('chart.ranges.1d.series.ozone')
+                ->where('settings.disinfectant', 'ozone')
+                ->where('settings.disinfectants.0.key', 'ozone')
+                ->where('settings.disinfectants.1.key', 'chlorine_dioxide')
                 ->has('cip', 2)
                 ->where('can.configure', true)
                 ->where('can.writeNotes', true));

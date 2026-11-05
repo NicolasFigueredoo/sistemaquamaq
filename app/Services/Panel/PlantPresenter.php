@@ -258,7 +258,7 @@ class PlantPresenter
         $variables = Variable::catalog();
         $setpoints = $this->ingestor->setpointsFor($plant->id, $variables);
 
-        return $variables->only(Variable::DISINFECTANTS)->values()->map(fn (Variable $v) => [
+        return $variables->toBase()->only(Variable::DISINFECTANTS)->values()->map(fn (Variable $v) => [
             'key' => $v->key,
             'name' => $v->name,
             'unit' => $v->unit,
