@@ -52,24 +52,36 @@ return [
 
         // Canal de Exemys (ioID) => key de la variable del panel. Los canales sin mapear se ignoran.
         'io_map' => [
-            53292 => 'temperature', // PV Controlador 1
+            53292 => 'alkaline',    // AN1 · conductividad del agua (la plataforma ya la entrega en mS/cm)
+            53294 => 'temperature', // AN2 · temperatura del agua (la plataforma ya la entrega en °C)
+            53920 => 'disinfectant',    // AN5 · se guarda como ozono o dióxido según la planta (la plataforma ya lo entrega en ppm)
+            53921 => 'effective_time',  // AN6 · tiempo efectivo de lavado (segundos)
         ],
 
         // Marcas CIP del PLC (1 = etapa corriendo, 0 = terminada): ioID => 'equipo.etapa'.
-        // Canales I1–I8 del módulo = M800–M807 del PLC FATEK. Completar con los ioID que da `exemys:fetch`.
+        // Canales I1–I8 del módulo = M800–M807 del PLC FATEK.
         'cip_map' => [
-            // 00000 => 'lavadora.saneado',        // I1 · M800
-            // 00000 => 'lavadora.enjuague',       // I2 · M801
-            // 00000 => 'lavadora.desinfeccion',   // I3 · M802
-            // 00000 => 'lavadora.enjuague_final', // I4 · M803
-            // 00000 => 'llenadora.saneado',       // I5 · M804
-            // 00000 => 'llenadora.enjuague',      // I6 · M805
-            // 00000 => 'llenadora.desinfeccion',  // I7 · M806
-            // 00000 => 'llenadora.enjuague_final',// I8 · M807
+            53922 => 'lavadora.saneado',         // I1 · M800
+            53923 => 'lavadora.enjuague',        // I2 · M801
+            53924 => 'lavadora.desinfeccion',    // I3 · M802
+            53925 => 'lavadora.enjuague_final',  // I4 · M803
+            53926 => 'llenadora.saneado',        // I5 · M804
+            53927 => 'llenadora.enjuague',       // I6 · M805
+            53928 => 'llenadora.desinfeccion',   // I7 · M806
+            53929 => 'llenadora.enjuague_final', // I8 · M807
+        ],
+
+        // Equipo en producción (I9 e I10): con el equipo detenido sus variables no se registran.
+        'production_map' => [
+            53930 => 'lavadora',  // I9
+            53931 => 'llenadora', // I10
         ],
 
         // Mientras el módulo no lee los equipos: el scheduler simula la planta (`telemetry:simulate --exemys`) en lugar de sincronizar.
         'simulate' => filter_var(env('EXEMYS_SIMULATE', false), FILTER_VALIDATE_BOOL),
+
+        // Desde esta fecha (hora Argentina) la plataforma entrega los valores convertidos: lo anterior no se importa.
+        'data_from' => env('EXEMYS_DATA_FROM', '2026-11-04 19:00:00'),
 
         // Días de histórico a traer la primera vez (después solo trae lo nuevo).
         'backfill_days' => (int) env('EXEMYS_BACKFILL_DAYS', 30),

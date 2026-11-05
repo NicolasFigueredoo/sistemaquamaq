@@ -10,22 +10,23 @@ const props = defineProps({
 const emit = defineEmits(['close'])
 
 const byKey = Object.fromEntries(props.variables.map((v) => [v.key, v]))
-const ozone = byKey.ozone
 const temperature = byKey.temperature
 const alkaline = byKey.alkaline
-const dioxide = byKey.chlorine_dioxide
+
+const disinfectants = props.settings.disinfectants
 
 const form = useForm({
     setpoints: {
-        ozone: Number(ozone?.setpoint ?? 0.5).toFixed(2),
         temperature: Number(temperature?.setpoint ?? 60).toFixed(1),
-        alkaline: Number(alkaline?.setpoint ?? 300).toFixed(0),
-        ...(dioxide ? { chlorine_dioxide: Number(dioxide.setpoint).toFixed(2) } : {}),
+        alkaline: Number(alkaline?.setpoint ?? 0.3).toFixed(1),
+        ...Object.fromEntries(disinfectants.map((d) => [d.key, Number(d.setpoint).toFixed(2)])),
     },
-    setpoints_high: dioxide ? { chlorine_dioxide: Number(dioxide.setpointHigh ?? dioxide.setpoint).toFixed(2) } : {},
+    setpoints_high: Object.fromEntries(disinfectants.map((d) => [d.key, Number(d.setpointHigh ?? d.setpoint).toFixed(2)])),
+    disinfectant: props.settings.disinfectant,
     cip_period_days: props.settings.cipPeriodDays,
 })
 
+const disinfectant = computed(() => disinfectants.find((d) => d.key === form.disinfectant))
 const errors = computed(() => Object.values(form.errors))
 const firstInput = ref(null)
 
@@ -57,16 +58,14 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
                 <button id="config-close" class="modal-close" type="button" aria-label="Cerrar" @click="emit('close')">×</button>
             </div>
             <div class="config-grid">
-                <label class="field"><span>{{ ozone?.name ?? 'Ozono en llenadora' }}</span><input id="ozone-setpoint-input" ref="firstInput" v-model="form.setpoints.ozone" type="number" :min="ozone?.setpointMin ?? 0" :max="ozone?.setpointMax ?? 100" step="0.01" required><small>{{ ozone?.unit ?? 'ppm' }}</small></label>
+                <label class="field"><span>Desinfectante</span><select id="disinfectant-input" ref="firstInput" v-model="form.disinfectant"><option v-for="d in disinfectants" :key="d.key" :value="d.key">{{ d.name }}</option></select><small>el que usa esta fábrica</small></label>
+                <label class="field"><span>{{ disinfectant.name }} · mínimo</span><input id="disinfectant-min-input" v-model="form.setpoints[disinfectant.key]" type="number" :min="disinfectant.setpointMin ?? 0" :max="disinfectant.setpointMax ?? 100" step="0.01" required><small>{{ disinfectant.unit }} · alarma por baja</small></label>
+                <label class="field"><span>{{ disinfectant.name }} · máximo</span><input id="disinfectant-max-input" v-model="form.setpoints_high[disinfectant.key]" type="number" :min="disinfectant.setpointMin ?? 0" :max="disinfectant.setpointMax ?? 100" step="0.01" required><small>{{ disinfectant.unit }} · alarma por alta</small></label>
                 <label class="field"><span>{{ temperature?.name ?? 'Temperatura de lavado' }}</span><input id="temperature-setpoint-input" v-model="form.setpoints.temperature" type="number" :min="temperature?.setpointMin ?? 0" :max="temperature?.setpointMax ?? 100" step="0.1" required><small>{{ temperature?.unit ?? '°C' }}</small></label>
-                <label class="field"><span>{{ alkaline?.name ?? 'Producto alcalino' }}</span><input id="alkaline-setpoint-input" v-model="form.setpoints.alkaline" type="number" :min="alkaline?.setpointMin ?? 0" :max="alkaline?.setpointMax ?? 20000" step="1" required><small>{{ alkaline?.unit ?? 'µS/cm' }}</small></label>
-                <template v-if="dioxide">
-                    <label class="field"><span>{{ dioxide.name }} · mínimo</span><input id="dioxide-min-input" v-model="form.setpoints.chlorine_dioxide" type="number" :min="dioxide.setpointMin ?? 0" :max="dioxide.setpointMax ?? 100" step="0.01" required><small>{{ dioxide.unit }} · alarma por baja</small></label>
-                    <label class="field"><span>{{ dioxide.name }} · máximo</span><input id="dioxide-max-input" v-model="form.setpoints_high.chlorine_dioxide" type="number" :min="dioxide.setpointMin ?? 0" :max="dioxide.setpointMax ?? 100" step="0.01" required><small>{{ dioxide.unit }} · alarma por alta</small></label>
-                </template>
+                <label class="field"><span>{{ alkaline?.name ?? 'Conductividad del agua' }}</span><input id="alkaline-setpoint-input" v-model="form.setpoints.alkaline" type="number" :min="alkaline?.setpointMin ?? 0" :max="alkaline?.setpointMax ?? 20" step="0.1" required><small>{{ alkaline?.unit ?? 'mS/cm' }}</small></label>
                 <label class="field"><span>Periodicidad CIP</span><input id="period-days-input" v-model="form.cip_period_days" type="number" min="1" max="30" step="1" required><small>días desde el último ciclo completo</small></label>
             </div>
-            <p class="config-note">Los setpoints se reflejan en las líneas rojas de los gráficos. El producto alcalino se controla por la conductividad medida en el tanque de dosificación. El dióxido de cloro necesita un mínimo para desinfectar y un máximo para no transferir gusto. La configuración se guarda por planta y cada cambio queda registrado con su autor.</p>
+            <p class="config-note">Los setpoints se reflejan en las líneas rojas de los gráficos. El desinfectante necesita un mínimo para desinfectar y un máximo para no transferir gusto. La configuración se guarda por planta y cada cambio queda registrado con su autor.</p>
             <div v-if="errors.length" class="form-errors" role="alert"><p v-for="(e, i) in errors" :key="i">{{ e }}</p></div>
             <button class="save-button" type="submit" :disabled="form.processing">GUARDAR SETPOINTS</button>
         </form>

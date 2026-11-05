@@ -44,8 +44,11 @@ class PlantPresenter
         $variables = Variable::catalog();
         $setpoints = $this->ingestor->setpointsFor($plant->id, $variables);
         $states = $plant->variableStates()->get()->keyBy('variable_id');
+        $disinfectant = $plant->settingsOrDefault()->disinfectant;
+        $visible = $variables->reject(fn (Variable $v) => in_array($v->key, Variable::DISINFECTANTS, true) && $v->key !== $disinfectant);
+        $stopped = $plant->equipment()->where('producing', false)->pluck('name', 'type');
 
-        return $variables->values()->map(function (Variable $v) use ($setpoints, $states) {
+        return $visible->values()->map(function (Variable $v) use ($setpoints, $states, $stopped) {
             $state = $states->get($v->id);
 
             return [
@@ -70,6 +73,7 @@ class PlantPresenter
                 'value' => $state?->last_value,
                 'measuredAt' => self::ms($state?->last_measured_at),
                 'outSince' => self::ms($state?->out_since),
+                'stoppedEquipment' => $stopped->get($v->equipmentType()),
             ];
         })->all();
     }
@@ -243,7 +247,26 @@ class PlantPresenter
         return [
             'cipPeriodDays' => $s->cip_period_days,
             'cipWarningHours' => $s->cip_warning_hours,
+            'disinfectant' => $s->disinfectant,
+            'disinfectants' => $this->disinfectants($plant),
         ];
+    }
+
+    /** Desinfectantes que se pueden elegir en la configuración, con sus setpoints en esta planta. */
+    private function disinfectants(Plant $plant): array
+    {
+        $variables = Variable::catalog();
+        $setpoints = $this->ingestor->setpointsFor($plant->id, $variables);
+
+        return $variables->only(Variable::DISINFECTANTS)->values()->map(fn (Variable $v) => [
+            'key' => $v->key,
+            'name' => $v->name,
+            'unit' => $v->unit,
+            'setpoint' => $setpoints[$v->id]->setpoint,
+            'setpointHigh' => $setpoints[$v->id]->setpoint_high,
+            'setpointMin' => $v->setpoint_min,
+            'setpointMax' => $v->setpoint_max,
+        ])->all();
     }
 
     public function cipHistory(Plant $plant, CarbonImmutable $now): array

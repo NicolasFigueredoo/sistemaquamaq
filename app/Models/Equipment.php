@@ -11,7 +11,15 @@ class Equipment extends Model
 {
     protected $table = 'equipment';
 
-    protected $fillable = ['plant_id', 'type', 'name'];
+    protected $fillable = ['plant_id', 'type', 'name', 'producing', 'producing_at'];
+
+    protected function casts(): array
+    {
+        return [
+            'producing' => 'boolean',
+            'producing_at' => 'datetime',
+        ];
+    }
 
     public function plant(): BelongsTo
     {

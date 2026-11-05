@@ -13,6 +13,7 @@ use InvalidArgumentException;
  *   {"ts": 1759600000000, "values": {"ozone": 0.55, "temperature": 62.4}}
  *   {"ts": "2026-10-04T14:32:10-03:00", "ozone": 0.55, "temperature": 62.4}
  *   {"records": [ {...}, {...} ]}   ó   [ {...}, {...} ]   (lote, p. ej. al vaciar la cola tras un corte)
+ * Opcional en cada registro: "producing": {"lavadora": true, "llenadora": false}.
  *
  * CIP:
  *   {"cycle_id": "LAV-0412", "equipment": "lavadora", "started_at": ..., "finished_at": ...,
@@ -23,7 +24,7 @@ use InvalidArgumentException;
 class PayloadParser
 {
     /**
-     * @return list<array{measured_at: CarbonImmutable, values: array<string, float>}>
+     * @return list<array{measured_at: CarbonImmutable, values: array<string, float>, producing: array<string, bool>}>
      */
     public function telemetry(mixed $payload, CarbonImmutable $receivedAt): array
     {
@@ -43,7 +44,7 @@ class PayloadParser
             $ts = $record['ts'] ?? $record['timestamp'] ?? $record['time'] ?? null;
             $values = isset($record['values']) && is_array($record['values'])
                 ? $record['values']
-                : array_diff_key($record, array_flip(['ts', 'timestamp', 'time', 'serial', 'gateway']));
+                : array_diff_key($record, array_flip(['ts', 'timestamp', 'time', 'serial', 'gateway', 'producing']));
 
             $clean = [];
             foreach ($values as $key => $value) {
@@ -58,8 +59,13 @@ class PayloadParser
                 }
             }
 
-            if ($clean !== []) {
-                $out[] = ['measured_at' => $this->timestamp($ts, $receivedAt), 'values' => $clean];
+            $producing = array_map(fn ($on) => (bool) $on, array_intersect_key(
+                (array) ($record['producing'] ?? []),
+                array_flip(['lavadora', 'llenadora']),
+            ));
+
+            if ($clean !== [] || $producing !== []) {
+                $out[] = ['measured_at' => $this->timestamp($ts, $receivedAt), 'values' => $clean, 'producing' => $producing];
             }
         }
 

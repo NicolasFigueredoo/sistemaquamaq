@@ -56,11 +56,11 @@ class PanelTest extends TestCase
             ->get("/plantas/{$plant->code}")
             ->assertOk()
             ->assertInertia(fn (Assert $p) => $p->component('Plant')
-                ->where('plant.status', 'atencion')
-                ->has('variables', 6)
-                ->where('banner.kind', 'warning')
+                ->where('plant.status', 'alarma')
+                ->has('variables', 5)
+                ->where('banner.kind', 'alarm')
                 ->where('banner.variable', 'ozone')
-                ->has('chart.series.ozone', 720)
+                ->has('chart.ranges.1d.series.ozone')
                 ->has('cip', 2)
                 ->where('can.configure', true)
                 ->where('can.writeNotes', true));
@@ -104,8 +104,9 @@ class PanelTest extends TestCase
 
         $admin = $this->user(Role::Admin);
         $valid = [
-            'setpoints' => ['ozone' => 0.55, 'temperature' => 60, 'alkaline' => 300, 'chlorine_dioxide' => 0.20],
-            'setpoints_high' => ['chlorine_dioxide' => 0.80],
+            'setpoints' => ['ozone' => 0.55, 'temperature' => 60, 'alkaline' => 0.3],
+            'setpoints_high' => ['ozone' => 1],
+            'disinfectant' => 'ozone',
             'cip_period_days' => 5,
         ];
 
@@ -113,13 +114,13 @@ class PanelTest extends TestCase
 
         $this->assertSame(5, $plant->settings()->first()->cip_period_days);
         $state = PlantVariableState::where('plant_id', $plant->id)->where('variable_id', Variable::where('key', 'ozone')->value('id'))->first();
-        $this->assertSame(VariableState::Atencion, $state->state, '0,52 ya no cumple con setpoint 0,55');
-        $this->assertSame(PlantStatus::Atencion, $plant->fresh()->status);
+        $this->assertSame(VariableState::Alarma, $state->state, '0,52 ya no cumple con setpoint 0,55');
+        $this->assertSame(PlantStatus::Alarma, $plant->fresh()->status);
         $this->assertSame(2, SetpointChange::count()); // ozone, período
         $this->assertSame($admin->id, SetpointChange::first()->user_id);
 
         $this->actingAs($admin)->put("/plantas/{$plant->code}/configuracion", array_replace_recursive($valid, ['setpoints' => ['ozone' => 2]]))
-            ->assertSessionHasErrors('setpoints.ozone');
+            ->assertSessionHasErrors('setpoints_high.ozone');
 
         $this->actingAs($this->user(Role::Auditor))->put("/plantas/{$plant->code}/configuracion", $valid)->assertForbidden();
     }
@@ -128,7 +129,7 @@ class PanelTest extends TestCase
     {
         [$plant] = $this->makePlant();
         $admin = $this->user(Role::Admin);
-        $base = ['setpoints' => ['ozone' => 0.50, 'temperature' => 60, 'alkaline' => 300], 'cip_period_days' => 7];
+        $base = ['setpoints' => ['temperature' => 60, 'alkaline' => 0.3], 'disinfectant' => 'chlorine_dioxide', 'cip_period_days' => 7];
         $put = fn (float $min, float $max) => $this->actingAs($admin)->put("/plantas/{$plant->code}/configuracion",
             array_replace_recursive($base, ['setpoints' => ['chlorine_dioxide' => $min], 'setpoints_high' => ['chlorine_dioxide' => $max]]));
 
@@ -136,7 +137,8 @@ class PanelTest extends TestCase
         $sp = \App\Models\PlantSetpoint::where('plant_id', $plant->id)->where('variable_id', Variable::where('key', 'chlorine_dioxide')->value('id'))->sole();
         $this->assertEqualsWithDelta(0.30, $sp->setpoint, 0.0001);
         $this->assertEqualsWithDelta(0.60, $sp->setpoint_high, 0.0001);
-        $this->assertEqualsCanonicalizing(['chlorine_dioxide', 'chlorine_dioxide_high'], SetpointChange::pluck('field')->all());
+        $this->assertEqualsCanonicalizing(['disinfectant:chlorine_dioxide', 'chlorine_dioxide', 'chlorine_dioxide_high'], SetpointChange::pluck('field')->all());
+        $this->assertSame('chlorine_dioxide', $plant->settings()->first()->disinfectant);
 
         $put(0.60, 0.40)->assertSessionHasErrors('setpoints_high.chlorine_dioxide');
     }

@@ -12,7 +12,7 @@ use RuntimeException;
  *
  * Particularidades de la API real (no están en el PDF):
  *  - Con credenciales malas responde HTTP 200 con el texto "Auth Error".
- *  - Todos los números llegan como string ("18.9", "1").
+ *  - Todos los números llegan como string ("18.9", "1"); las marcas digitales, como "ON" / "OFF".
  *  - En el histórico un valor puede venir con "*" al final ("53.0*"); se lo marca como flagged.
  */
 class ExemysClient
@@ -168,6 +168,11 @@ class ExemysClient
         $raw = trim((string) $raw);
         $flag = str_ends_with($raw, '*');
         $raw = rtrim($raw, '*');
+        $raw = match (strtoupper($raw)) {
+            'ON' => '1',
+            'OFF' => '0',
+            default => $raw,
+        };
 
         if (! is_numeric($raw) || abs((float) $raw) >= self::READ_ERROR) {
             return [null, $flag];

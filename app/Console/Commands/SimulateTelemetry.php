@@ -66,7 +66,8 @@ class SimulateTelemetry extends Command
         do {
             $now = CarbonImmutable::now()->utc()->startOfSecond();
             foreach ($gateways as $gateway) {
-                $payload = json_encode($this->payload($gateway, $variables, $now));
+                $production = $exemys ? ['producing' => ['lavadora' => true, 'llenadora' => true]] : [];
+                $payload = json_encode($this->payload($gateway, $variables, $now) + $production);
                 $prefix = config('telemetry.mqtt.topic_prefix');
 
                 if ($mqtt) {
@@ -111,7 +112,7 @@ class SimulateTelemetry extends Command
         $minute = intdiv($now->getTimestamp(), 60);
         $inDip = (($minute + $gateway->plant_id * 53) % 240) < 15;
         $dipKey = ['ozone', 'temperature', 'alkaline', 'chlorine_dioxide'][$gateway->plant_id % 4];
-        $dipBy = ['ozone' => 0.07, 'temperature' => 4, 'alkaline' => 45, 'chlorine_dioxide' => 0.1];
+        $dipBy = ['ozone' => 0.07, 'temperature' => 4, 'alkaline' => 0.045, 'chlorine_dioxide' => 0.1];
         // El dióxido de cloro tiene rango: sus desvíos alternan por baja y por alta.
         $dipHigh = intdiv($minute + $gateway->plant_id * 53, 240) % 2 === 1;
 
@@ -179,9 +180,11 @@ class SimulateTelemetry extends Command
                 $active = null;
             }
 
+            $marks = [];
             foreach (CipCycle::STAGES as $i => $stage) {
-                $cip->signal($gateway, $equipment, $stage, $i === $active, $now);
+                $marks[] = ['equipment' => $equipment, 'stage' => $stage, 'on' => $i === $active];
             }
+            $cip->signals($gateway, $marks, $now);
         }
 
         app(PlantStatusService::class)->refresh($gateway->plant, $now);

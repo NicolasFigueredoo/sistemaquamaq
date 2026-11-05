@@ -22,6 +22,7 @@ class TelemetryIngestor
         private PlantStatusService $status,
         private GatewayPresence $presence,
         private CipService $cip,
+        private ProductionService $production,
     ) {}
 
     /**
@@ -83,16 +84,26 @@ class TelemetryIngestor
             $plant = $gateway->plant()->lockForUpdate()->firstOrFail();
             $variables = Variable::catalog();
             $setpoints = $this->setpointsFor($plant->id, $variables);
+            $disinfectant = $plant->settingsOrDefault()->disinfectant;
             $inserted = 0;
             $latest = $plant->last_reading_at ? CarbonImmutable::parse($plant->last_reading_at) : null;
 
             foreach ($records as $record) {
                 $measuredAt = $record['measured_at'];
+                $stopped = $this->production->stopped($plant, $record['producing'], $measuredAt);
 
                 foreach ($record['values'] as $key => $value) {
+                    $key = $key === Variable::DISINFECTANT_CHANNEL ? $disinfectant : $key;
+                    if (in_array($key, Variable::DISINFECTANTS, true) && $key !== $disinfectant) {
+                        continue; // la planta usa el otro desinfectante
+                    }
+
                     $variable = $variables->get($key);
                     if (! $variable) {
                         continue; // variable desconocida: se ignora sin romper el resto del mensaje
+                    }
+                    if (in_array($variable->equipmentType(), $stopped, true)) {
+                        continue; // equipo encendido sin producir: el dato no interesa
                     }
 
                     $isNew = DB::table('readings')->insertOrIgnore([

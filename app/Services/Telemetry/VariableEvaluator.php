@@ -17,7 +17,7 @@ use Carbon\CarbonImmutable;
  *    └─────────(vuelve a cumplir)───┴───────────(vuelve a cumplir)─────────────┘
  *
  * En las variables con rango (mínimo y máximo) sale de parámetro tanto por baja como por alta.
- * Las variables de Variable::IMMEDIATE_ALARM (temperatura) no tienen atención: pasan directo a alarma.
+ * Las variables de Variable::IMMEDIATE_ALARM no tienen atención: pasan directo a alarma (roja).
  * Solo las alarmas quedan registradas en alarm_events, con inicio = momento en que
  * salió de parámetro y fin = momento en que se normalizó.
  */
@@ -62,6 +62,24 @@ class VariableEvaluator
 
         $this->apply($state, $variable, $setpoint, $state->last_value, $now);
         $state->save();
+    }
+
+    /** La variable deja de usarse en la planta: cierra su alarma abierta y borra su estado. */
+    public function dismiss(int $plantId, Variable $variable, CarbonImmutable $at): void
+    {
+        $state = PlantVariableState::where('plant_id', $plantId)->where('variable_id', $variable->id)->first();
+        if (! $state) {
+            return;
+        }
+
+        $event = $state->open_alarm_event_id ? AlarmEvent::find($state->open_alarm_event_id) : null;
+        if ($event && $event->ended_at === null) {
+            $event->ended_at = $at;
+            $event->duration_s = max(0, (int) $event->started_at->diffInSeconds($at));
+            $event->save();
+        }
+
+        PlantVariableState::where('plant_id', $plantId)->where('variable_id', $variable->id)->delete();
     }
 
     private function apply(PlantVariableState $state, Variable $variable, PlantSetpoint $setpoint, float $value, CarbonImmutable $at): void

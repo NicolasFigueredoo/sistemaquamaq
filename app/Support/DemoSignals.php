@@ -26,14 +26,14 @@ class DemoSignals
     {
         $i = $t + $phase;
 
-        return 369 + sin($i / 15) * 31.5 + sin($i / 62) * 21;
+        return 0.369 + sin($i / 15) * 0.0315 + sin($i / 62) * 0.021;
     }
 
     public static function chlorineDioxide(float $t, int $phase): float
     {
         $i = $t + $phase;
 
-        return 0.5 + sin($i / 9) * 0.08 + sin($i / 41) * 0.05;
+        return 0.225 + sin($i / 9) * 0.03 + sin($i / 41) * 0.02;
     }
 
     /** Caídas periódicas (una hora cada tantas) para que haya cruces del setpoint. */
@@ -44,7 +44,7 @@ class DemoSignals
         return match ($key) {
             'ozone' => ($i % 193) < 1 ? 0.11 : 0,
             'temperature' => ($i % 217) < 1 ? 8 : 0,
-            'alkaline' => ($i % 181) < 1 ? 97.5 : 0,
+            'alkaline' => ($i % 181) < 1 ? 0.0975 : 0,
             default => 0,
         };
     }

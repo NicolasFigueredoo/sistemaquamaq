@@ -11,11 +11,12 @@ class PlantSetting extends Model
 
     public $incrementing = false;
 
-    protected $fillable = ['plant_id', 'cip_period_days', 'cip_warning_hours', 'tank_volume_l', 'product_liters', 'offline_after_minutes', 'updated_by'];
+    protected $fillable = ['plant_id', 'cip_period_days', 'cip_warning_hours', 'disinfectant', 'tank_volume_l', 'product_liters', 'offline_after_minutes', 'updated_by'];
 
     protected $attributes = [
         'cip_period_days' => 7,
         'cip_warning_hours' => 24,
+        'disinfectant' => 'ozone',
         'tank_volume_l' => 1000,
         'product_liters' => 18.2,
         'offline_after_minutes' => 10,

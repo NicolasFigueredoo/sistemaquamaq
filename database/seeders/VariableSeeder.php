@@ -12,12 +12,12 @@ class VariableSeeder extends Seeder
     {
         $rows = [
             ['key' => 'ozone', 'name' => 'Ozono en llenadora', 'short_name' => 'Ozono en llenadora', 'alert_name' => 'Ozono en llenadora',
-                'unit' => 'ppm', 'decimals' => 2, 'kind' => 'analog', 'rule' => 'min', 'default_setpoint' => 0.50,
+                'unit' => 'ppm', 'decimals' => 2, 'kind' => 'analog', 'rule' => 'range', 'default_setpoint' => 0.50, 'default_setpoint_high' => 1,
                 'setpoint_min' => 0, 'setpoint_max' => 100, 'chart_min' => 0.30, 'chart_max' => 0.80,
                 'chart_color' => '#0b7fba', 'sort' => 1, 'chart_sort' => 1],
-            ['key' => 'alkaline', 'name' => 'Producto alcalino', 'short_name' => 'Producto alcalino', 'alert_name' => 'Conductividad del producto alcalino',
-                'unit' => 'µS/cm', 'decimals' => 0, 'kind' => 'analog', 'rule' => 'min', 'default_setpoint' => 300,
-                'setpoint_min' => 0, 'setpoint_max' => 20000, 'chart_min' => 150, 'chart_max' => 525,
+            ['key' => 'alkaline', 'name' => 'Conductividad del agua', 'short_name' => 'Conductividad del agua', 'alert_name' => 'Conductividad del agua',
+                'unit' => 'mS/cm', 'decimals' => 1, 'kind' => 'analog', 'rule' => 'min', 'default_setpoint' => 0.3,
+                'setpoint_min' => 0, 'setpoint_max' => 20, 'chart_min' => 0, 'chart_max' => 20,
                 'chart_color' => '#7b62c7', 'sort' => 2, 'chart_sort' => 3],
             ['key' => 'temperature', 'name' => 'Temperatura de lavado', 'short_name' => 'Temperatura lavado', 'alert_name' => 'Temperatura de lavado',
                 'unit' => '°C', 'decimals' => 1, 'kind' => 'analog', 'rule' => 'min', 'default_setpoint' => 60,
@@ -33,8 +33,8 @@ class VariableSeeder extends Seeder
                 'chart_color' => null, 'sort' => 5, 'chart_sort' => null],
             // Mínimo por desinfección, máximo porque por arriba transfiere gusto: alarma por baja o por alta.
             ['key' => 'chlorine_dioxide', 'name' => 'Dióxido de cloro', 'short_name' => 'Dióxido de cloro', 'alert_name' => 'Dióxido de cloro',
-                'unit' => 'ppm', 'decimals' => 2, 'kind' => 'analog', 'rule' => 'range', 'default_setpoint' => 0.20, 'default_setpoint_high' => 0.80,
-                'setpoint_min' => 0, 'setpoint_max' => 100, 'chart_min' => 0, 'chart_max' => 1,
+                'unit' => 'ppm', 'decimals' => 2, 'kind' => 'analog', 'rule' => 'range', 'default_setpoint' => 0.15, 'default_setpoint_high' => 0.30,
+                'setpoint_min' => 0, 'setpoint_max' => 100, 'chart_min' => 0, 'chart_max' => 0.5,
                 'chart_color' => '#2f9e6e', 'sort' => 6, 'chart_sort' => 4],
         ];
 

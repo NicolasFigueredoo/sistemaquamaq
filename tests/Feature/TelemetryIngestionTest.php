@@ -62,21 +62,21 @@ class TelemetryIngestionTest extends TestCase
         [$plant, $gateway] = $this->makePlant();
         $t0 = CarbonImmutable::parse('2026-10-04 12:00:00', 'UTC');
 
-        $this->ingestor->telemetry($gateway, $this->payload($t0->getTimestampMs(), ['ozone' => 0.45]), $t0);
-        $this->assertSame(VariableState::Atencion, $this->state($plant, 'ozone')->state);
+        $this->ingestor->telemetry($gateway, $this->payload($t0->getTimestampMs(), ['effective_time' => 100]), $t0);
+        $this->assertSame(VariableState::Atencion, $this->state($plant, 'effective_time')->state);
         $this->assertSame(PlantStatus::Atencion, $plant->fresh()->status);
         $this->assertSame(0, AlarmEvent::count(), 'atención no genera evento');
 
         // Sigue fuera de parámetro 5 minutos (alarm_delay_s = 300 por defecto) → alarma.
         $t1 = $t0->addMinutes(5);
-        $this->ingestor->telemetry($gateway, $this->payload($t1->getTimestampMs(), ['ozone' => 0.40]), $t1);
-        $this->assertSame(VariableState::Alarma, $this->state($plant, 'ozone')->state);
+        $this->ingestor->telemetry($gateway, $this->payload($t1->getTimestampMs(), ['effective_time' => 90]), $t1);
+        $this->assertSame(VariableState::Alarma, $this->state($plant, 'effective_time')->state);
         $this->assertSame(PlantStatus::Alarma, $plant->fresh()->status);
         $event = AlarmEvent::sole();
         $this->assertTrue($event->started_at->equalTo($t0), 'el evento empieza cuando salió de parámetro');
         $this->assertNull($event->ended_at);
-        $this->assertEqualsWithDelta(0.40, $event->worst_value, 0.001);
-        $this->assertEqualsWithDelta(0.50, $event->setpoint_at_start, 0.001);
+        $this->assertEqualsWithDelta(90, $event->worst_value, 0.001);
+        $this->assertEqualsWithDelta(120, $event->setpoint_at_start, 0.001);
 
         // Vuelve a parámetro → se cierra el evento.
         $t2 = $t0->addMinutes(17);
@@ -84,7 +84,7 @@ class TelemetryIngestionTest extends TestCase
         $event->refresh();
         $this->assertTrue($event->ended_at->equalTo($t2));
         $this->assertSame(17 * 60, $event->duration_s);
-        $this->assertSame(VariableState::Ok, $this->state($plant, 'ozone')->state);
+        $this->assertSame(VariableState::Ok, $this->state($plant, 'effective_time')->state);
         $this->assertSame(PlantStatus::Conforme, $plant->fresh()->status);
     }
 
@@ -101,39 +101,190 @@ class TelemetryIngestionTest extends TestCase
 
     public function test_chlorine_dioxide_alarms_below_minimum_and_above_maximum(): void
     {
-        [$plant, $gateway] = $this->makePlant(); // rango por defecto 0,20 a 0,80 ppm, 5 min de demora
+        [$plant, $gateway] = $this->makePlant(); // rango por defecto 0,15 a 0,30 ppm
+        $plant->settingsOrDefault()->update(['disinfectant' => 'chlorine_dioxide']);
         $t0 = CarbonImmutable::parse('2026-10-04 12:00:00', 'UTC');
         $send = fn (int $min, float $value) => $this->ingestor->telemetry($gateway, $this->payload($t0->addMinutes($min)->getTimestampMs(), ['chlorine_dioxide' => $value]), $t0->addMinutes($min));
 
-        $send(0, 0.50);
+        $send(0, 0.20);
         $this->assertSame(VariableState::Ok, $this->state($plant, 'chlorine_dioxide')->state);
 
-        // Por alta: atención y, a los 5 minutos, alarma registrada contra el máximo.
-        $send(1, 0.95);
-        $this->assertSame(VariableState::Atencion, $this->state($plant, 'chlorine_dioxide')->state);
-        $send(6, 1.10);
+        // Por alta: alarma inmediata, registrada contra el máximo.
+        $send(1, 0.40);
+        $this->assertSame(VariableState::Alarma, $this->state($plant, 'chlorine_dioxide')->state);
+        $send(6, 0.55);
         $this->assertSame(VariableState::Alarma, $this->state($plant, 'chlorine_dioxide')->state);
         $high = AlarmEvent::sole();
-        $this->assertEqualsWithDelta(0.80, (float) $high->setpoint_at_start, 0.0001);
-        $this->assertEqualsWithDelta(1.10, (float) $high->worst_value, 0.0001);
+        $this->assertEqualsWithDelta(0.30, (float) $high->setpoint_at_start, 0.0001);
+        $this->assertEqualsWithDelta(0.55, (float) $high->worst_value, 0.0001);
 
-        $send(7, 0.50);
+        $send(7, 0.20);
         $this->assertNotNull($high->fresh()->ended_at);
 
         // Por baja: alarma registrada contra el mínimo.
         $send(8, 0.10);
         $send(14, 0.05);
         $low = AlarmEvent::latest('id')->first();
-        $this->assertEqualsWithDelta(0.20, (float) $low->setpoint_at_start, 0.0001);
+        $this->assertEqualsWithDelta(0.15, (float) $low->setpoint_at_start, 0.0001);
         $this->assertEqualsWithDelta(0.05, (float) $low->worst_value, 0.0001);
         $this->assertSame(PlantStatus::Alarma, $plant->fresh()->status);
+    }
+
+    public function test_shared_channel_is_stored_as_the_plant_disinfectant(): void
+    {
+        [$plant, $gateway] = $this->makePlant();
+        $t = CarbonImmutable::parse('2026-10-04 12:00:00', 'UTC');
+        $count = fn (string $key) => DB::table('readings')->where('variable_id', Variable::where('key', $key)->value('id'))->count();
+        $send = fn (int $min, array $values) => $this->ingestor->telemetry($gateway, json_encode(['ts' => $t->addMinutes($min)->getTimestampMs(), 'values' => $values]), $t->addMinutes($min));
+
+        // Planta con ozono: el canal se guarda como ozono y el dióxido se descarta.
+        $send(0, ['disinfectant' => 0.60, 'chlorine_dioxide' => 0]);
+        $this->assertSame(1, $count('ozone'));
+        $this->assertSame(0, $count('chlorine_dioxide'));
+
+        // El ozono también alarma por alta.
+        $send(1, ['ozone' => 1.5]);
+        $this->assertSame(VariableState::Alarma, $this->state($plant, 'ozone')->state);
+
+        // Planta con dióxido: el mismo canal pasa a guardarse como dióxido.
+        $plant->settingsOrDefault()->update(['disinfectant' => 'chlorine_dioxide']);
+        $send(2, ['disinfectant' => 0.20, 'ozone' => 0]);
+        $this->assertSame(2, $count('ozone'));
+        $this->assertSame(1, $count('chlorine_dioxide'));
+    }
+
+    public function test_changing_disinfectant_clears_the_previous_one(): void
+    {
+        [$plant, $gateway] = $this->makePlant();
+        $t = CarbonImmutable::now()->startOfSecond()->subHour();
+        $this->ingestor->telemetry($gateway, $this->payload($t->getTimestampMs(), ['ozone' => 0.10]), $t);
+        $this->ingestor->telemetry($gateway, $this->payload($t->addMinutes(6)->getTimestampMs(), ['ozone' => 0.10]), $t->addMinutes(6));
+        $this->assertSame(PlantStatus::Alarma, $plant->fresh()->status);
+
+        $this->actingAs($this->user(\App\Enums\Role::Admin))->put("/plantas/{$plant->code}/configuracion", [
+            'setpoints' => ['temperature' => 60, 'alkaline' => 0.3, 'chlorine_dioxide' => 0.15],
+            'setpoints_high' => ['chlorine_dioxide' => 0.30],
+            'disinfectant' => 'chlorine_dioxide',
+            'cip_period_days' => 7,
+        ])->assertSessionHasNoErrors();
+
+        $this->assertNotNull(AlarmEvent::sole()->ended_at);
+        $this->assertSame(0, PlantVariableState::where('plant_id', $plant->id)->where('variable_id', Variable::where('key', 'ozone')->value('id'))->count());
+        $this->assertSame(PlantStatus::Conforme, $plant->fresh()->status);
+    }
+
+    public function test_conductivity_and_disinfectant_go_straight_to_alarm(): void
+    {
+        [$plant, $gateway] = $this->makePlant();
+        $t0 = CarbonImmutable::parse('2026-10-04 12:00:00', 'UTC');
+
+        $this->ingestor->telemetry($gateway, $this->payload($t0->getTimestampMs(), ['ozone' => 0.45, 'alkaline' => 0.2]), $t0);
+
+        $this->assertSame(VariableState::Alarma, $this->state($plant, 'ozone')->state);
+        $this->assertSame(VariableState::Alarma, $this->state($plant, 'alkaline')->state);
+        $this->assertSame(PlantStatus::Alarma, $plant->fresh()->status);
+        $this->assertSame(2, AlarmEvent::count());
+    }
+
+    public function test_stopped_equipment_records_nothing_and_closes_its_alarms(): void
+    {
+        [$plant, $gateway] = $this->makePlant();
+        $t = CarbonImmutable::parse('2026-10-04 12:00:00', 'UTC');
+        $count = fn (string $key) => DB::table('readings')->where('variable_id', Variable::where('key', $key)->value('id'))->count();
+        $send = fn (int $min, array $producing, array $values = []) => $this->ingestor->telemetry($gateway, json_encode([
+            'ts' => $t->addMinutes($min)->getTimestampMs(),
+            'producing' => $producing,
+            'values' => array_merge(['ozone' => 0.58, 'temperature' => 63.0], $values),
+        ]), $t->addMinutes($min));
+
+        // Los dos equipos producen: se registra todo y la temperatura baja dispara la alarma.
+        $send(0, ['lavadora' => true, 'llenadora' => true], ['temperature' => 20.0]);
+        $this->assertSame(PlantStatus::Alarma, $plant->fresh()->status);
+        $event = AlarmEvent::sole();
+
+        // La lavadora para: se cierra su alarma y sus datos dejan de guardarse. La llenadora sigue.
+        $send(10, ['lavadora' => false, 'llenadora' => true], ['temperature' => 20.0]);
+        $this->assertTrue($event->fresh()->ended_at->equalTo($t->addMinutes(10)));
+        $this->assertSame(1, $count('temperature'));
+        $this->assertSame(2, $count('ozone'));
+        $this->assertSame(PlantStatus::Conforme, $plant->fresh()->status);
+        $this->assertSame(1, AlarmEvent::count(), 'detenida no dispara alarma');
+
+        // Una muestra sin la señal usa el último estado conocido.
+        $this->ingestor->telemetry($gateway, $this->payload($t->addMinutes(20)->getTimestampMs(), ['temperature' => 20.0]), $t->addMinutes(20));
+        $this->assertSame(1, $count('temperature'));
+
+        // Una muestra vieja repetida no vuelve a cambiar el estado.
+        $send(0, ['lavadora' => true, 'llenadora' => true], ['temperature' => 20.0]);
+        $this->assertFalse($plant->equipment()->where('type', 'lavadora')->sole()->producing);
+
+        // La lavadora vuelve a producir: otra vez se registra y alarma.
+        $send(30, ['lavadora' => true, 'llenadora' => true], ['temperature' => 20.0]);
+        $this->assertSame(2, $count('temperature'));
+        $this->assertSame(2, AlarmEvent::count());
+    }
+
+    public function test_stopped_llenadora_does_not_stop_the_lavadora_variables(): void
+    {
+        [$plant, $gateway] = $this->makePlant();
+        $t = CarbonImmutable::parse('2026-10-04 12:00:00', 'UTC');
+
+        $this->ingestor->telemetry($gateway, json_encode([
+            'ts' => $t->getTimestampMs(),
+            'producing' => ['lavadora' => true, 'llenadora' => false],
+            'values' => ['ozone' => 0.10, 'temperature' => 63.0],
+        ]), $t);
+
+        $this->assertSame(0, AlarmEvent::count());
+        $this->assertSame(1, DB::table('readings')->count());
+        $this->assertSame(['ok', 'Llenadora'], [
+            collect(app(\App\Services\Panel\PlantPresenter::class)->variables($plant))->firstWhere('key', 'ozone')['state'],
+            collect(app(\App\Services\Panel\PlantPresenter::class)->variables($plant))->firstWhere('key', 'ozone')['stoppedEquipment'],
+        ]);
+    }
+
+    public function test_exemys_sync_reads_on_off_channels_as_the_platform_sends_them(): void
+    {
+        config([
+            'telemetry.exemys.unit_id' => 77,
+            'telemetry.exemys.username' => 'u',
+            'telemetry.exemys.password' => 'p',
+            'telemetry.exemys.data_from' => null,
+            'telemetry.exemys.io_map' => [1 => 'temperature', 2 => 'disinfectant'],
+            'telemetry.exemys.cip_map' => [3 => 'lavadora.saneado'],
+            'telemetry.exemys.production_map' => [4 => 'lavadora', 5 => 'llenadora'],
+        ]);
+        $this->seed(\Database\Seeders\VariableSeeder::class);
+
+        $current = fn (string $saneado, string $lavadora) => ['unitID' => 77, 'unitDesc' => 'GRD', 'linkState' => 1, 'lastReport' => '00:00:10', 'ios' => [
+            ['id' => 1, 'desc' => 'Temperatura', 'val' => '21.6', 'unit' => ''],
+            ['id' => 2, 'desc' => 'Dioxido', 'val' => '0.20', 'unit' => ''],
+            ['id' => 3, 'desc' => 'CIP LAV Saneado', 'val' => $saneado, 'unit' => ''],
+            ['id' => 4, 'desc' => 'Lavadora', 'val' => $lavadora, 'unit' => ''],
+            ['id' => 5, 'desc' => 'Llenadora', 'val' => 'ON', 'unit' => ''],
+        ]];
+        \Illuminate\Support\Facades\Http::fake([
+            '*historyValues.php*' => ['unitID' => 77, 'unitDesc' => 'GRD', 'ios' => [], 'records' => []],
+            '*currentValues.php*' => \Illuminate\Support\Facades\Http::sequence()
+                ->push($current('OFF', 'OFF'))->push($current('ON', 'OFF')),
+        ]);
+
+        $this->artisan('exemys:sync')->assertSuccessful();
+        $plant = Gateway::where('serial', 'EXEMYS-77')->sole()->plant;
+        $this->assertSame(0, DB::table('readings')->where('variable_id', Variable::where('key', 'temperature')->value('id'))->count());
+        $this->assertSame(1, DB::table('readings')->where('variable_id', Variable::where('key', 'ozone')->value('id'))->count());
+        $this->assertFalse($plant->equipment()->where('type', 'lavadora')->sole()->producing);
+
+        $this->travel(1)->minutes();
+        $this->artisan('exemys:sync')->assertSuccessful();
+        $this->assertSame('en_curso', CipCycle::sole()->result);
     }
 
     public function test_short_deviation_never_becomes_an_event(): void
     {
         [$plant, $gateway] = $this->makePlant();
         $t0 = CarbonImmutable::parse('2026-10-04 12:00:00', 'UTC');
-        $this->ingestor->telemetry($gateway, $this->payload($t0->getTimestampMs(), ['ozone' => 0.45]), $t0);
+        $this->ingestor->telemetry($gateway, $this->payload($t0->getTimestampMs(), ['effective_time' => 100]), $t0);
         $this->ingestor->telemetry($gateway, $this->payload($t0->addMinutes(2)->getTimestampMs()), $t0->addMinutes(2));
 
         $this->assertSame(0, AlarmEvent::count());
@@ -281,6 +432,7 @@ class TelemetryIngestionTest extends TestCase
             'telemetry.exemys.username' => 'u',
             'telemetry.exemys.password' => 'p',
             'telemetry.exemys.io_map' => [],
+            'telemetry.exemys.data_from' => null,
             'telemetry.exemys.cip_map' => [1 => 'lavadora.saneado', 2 => 'lavadora.enjuague', 3 => 'lavadora.desinfeccion', 4 => 'lavadora.enjuague_final'],
         ]);
 
@@ -308,6 +460,115 @@ class TelemetryIngestionTest extends TestCase
         // La corrida siguiente vuelve a traer la misma hora: no duplica nada.
         $this->artisan('exemys:sync')->assertSuccessful();
         $this->assertSame(1, CipCycle::count());
+    }
+
+    public function test_chained_cycles_without_pause_finish_complete(): void
+    {
+        [, $gateway] = $this->makePlant();
+        $cip = app(CipService::class);
+        $t = CarbonImmutable::now()->startOfMinute()->subHours(6);
+        $stages = CipCycle::STAGES;
+
+        // Una muestra por etapa, 20 minutos cada una, en el orden de los canales: como Matías dejó el PLC.
+        $sample = function (?int $active, int $minute) use ($cip, $gateway, $t, $stages) {
+            $marks = [];
+            foreach ($stages as $i => $stage) {
+                $marks[] = ['equipment' => 'lavadora', 'stage' => $stage, 'on' => $i === $active];
+            }
+            $cip->signals($gateway, $marks, $t->addMinutes($minute));
+        };
+
+        $sample(null, 0);
+        for ($step = 0; $step < 8; $step++) {
+            $sample($step % 4, ($step + 1) * 20);
+        }
+        $sample(0, 180); // arranca el tercer ciclo, justo cuando baja el enjuague final
+
+        $cycles = CipCycle::with('stages')->orderBy('started_at')->get();
+        $this->assertSame(['finalizado', 'finalizado', CipService::RUNNING], $cycles->pluck('result')->all());
+        $this->assertSame([20, 20, 20, 20], $cycles[0]->stages->pluck('duration_min')->all());
+        $this->assertSame([20, 20, 20, 20], $cycles[1]->stages->pluck('duration_min')->all());
+    }
+
+    public function test_exemys_sync_maps_real_channels_and_skips_data_before_cutoff(): void
+    {
+        $this->seed(\Database\Seeders\VariableSeeder::class);
+        $this->travelTo(CarbonImmutable::parse('2026-11-05 13:30:00', 'UTC'));
+        config([
+            'telemetry.exemys.unit_id' => 77,
+            'telemetry.exemys.username' => 'u',
+            'telemetry.exemys.password' => 'p',
+            'telemetry.exemys.data_from' => '2026-11-04 19:00:00',
+            'telemetry.exemys.cip_map' => [],
+        ]);
+
+        $ios = [['id' => 53292, 'desc' => 'PV Controlador 1', 'unit' => ''], ['id' => 53294, 'desc' => 'SV Controlador 1', 'unit' => '']];
+        \Illuminate\Support\Facades\Http::fake([
+            '*historyValues.php*' => ['unitID' => 77, 'unitDesc' => 'GRD', 'ios' => $ios, 'records' => [['date' => '2026-11-05 10:00:00', 'values' => '12.3,21.4']]],
+            '*currentValues.php*' => ['unitID' => 77, 'unitDesc' => 'GRD', 'linkState' => 1, 'lastReport' => '00:00:10', 'ios' => [
+                ['id' => 53292, 'desc' => 'PV Controlador 1', 'val' => '12.4', 'unit' => ''],
+                ['id' => 53294, 'desc' => 'SV Controlador 1', 'val' => '21.5', 'unit' => ''],
+            ]],
+        ]);
+
+        $this->artisan('exemys:sync')->assertSuccessful();
+
+        \Illuminate\Support\Facades\Http::assertSent(fn ($request) => ! str_contains($request->url(), 'historyValues')
+            || $request['since'] === '2026/11/04 19:00:00');
+
+        $plant = Gateway::where('serial', 'EXEMYS-77')->sole()->plant;
+        $this->assertEqualsWithDelta(12.4, (float) $this->state($plant, 'alkaline')->last_value, 0.0001);
+        $this->assertEqualsWithDelta(21.5, (float) $this->state($plant, 'temperature')->last_value, 0.0001);
+    }
+
+    public function test_conductivity_migration_converts_stored_data_to_ms(): void
+    {
+        [$plant] = $this->makePlant();
+        $alkaline = Variable::where('key', 'alkaline')->sole();
+        $dioxide = Variable::where('key', 'chlorine_dioxide')->sole();
+        DB::table('plant_setpoints')->insert([
+            ['plant_id' => $plant->id, 'variable_id' => $alkaline->id, 'setpoint' => 300, 'setpoint_high' => null],
+            ['plant_id' => $plant->id, 'variable_id' => $dioxide->id, 'setpoint' => 0.20, 'setpoint_high' => 0.80],
+        ]);
+        DB::table('readings')->insert([
+            'plant_id' => $plant->id, 'variable_id' => $alkaline->id, 'value' => 360,
+            'measured_at' => '2026-11-01 12:00:00', 'received_at' => '2026-11-01 12:00:00',
+        ]);
+
+        $migration = require database_path('migrations/2026_11_05_000100_conductivity_ms.php');
+        $migration->up();
+
+        $setpoint = fn (Variable $v) => DB::table('plant_setpoints')->where('variable_id', $v->id)->first();
+        $this->assertEqualsWithDelta(0.3, (float) $setpoint($alkaline)->setpoint, 0.0001);
+        $this->assertEqualsWithDelta(0.36, (float) DB::table('readings')->where('variable_id', $alkaline->id)->value('value'), 0.0001);
+        $this->assertEqualsWithDelta(0.15, (float) $setpoint($dioxide)->setpoint, 0.0001);
+        $this->assertEqualsWithDelta(0.30, (float) $setpoint($dioxide)->setpoint_high, 0.0001);
+        $this->assertSame('mS/cm', $alkaline->fresh()->unit);
+    }
+
+    public function test_purge_simulated_only_touches_exemys_plant(): void
+    {
+        [$plant, $gateway] = $this->makePlant(serial: 'EXEMYS-77');
+        [$other, $otherGateway] = $this->makePlant('Otra Planta', 'EM300-OTRA');
+        config(['telemetry.exemys.unit_id' => 77]);
+        $t = CarbonImmutable::now()->startOfSecond();
+        $this->ingestor->telemetry($gateway, $this->payload($t->getTimestampMs()), $t);
+        $this->ingestor->telemetry($otherGateway, $this->payload($t->getTimestampMs()), $t);
+        $cip = app(CipService::class);
+        foreach ([$gateway, $otherGateway] as $g) {
+            $cip->signal($g, 'lavadora', 'saneado', false, $t->subMinutes(2));
+            $cip->signal($g, 'lavadora', 'saneado', true, $t->subMinute());
+        }
+
+        $this->artisan('exemys:purge-simulated')
+            ->expectsConfirmation("Se borran TODAS las lecturas, alarmas y ciclos CIP de \"{$plant->name}\". ¿Continuar?", 'yes')
+            ->assertSuccessful();
+
+        $this->assertSame(0, DB::table('readings')->where('plant_id', $plant->id)->count());
+        $this->assertNull($plant->fresh()->last_reading_at);
+        $this->assertSame(5, DB::table('readings')->where('plant_id', $other->id)->count());
+        $this->assertSame(1, CipCycle::count());
+        $this->assertSame(1, DB::table('cip_stage_states')->count());
     }
 
     public function test_simulator_feeds_exemys_plant_with_plc_marks(): void

@@ -27,6 +27,12 @@ class Variable extends Model
         ];
     }
 
+    /** Cada planta usa uno solo de estos desinfectantes (PlantSetting::disinfectant). */
+    public const DISINFECTANTS = ['ozone', 'chlorine_dioxide'];
+
+    /** Key del canal compartido: la lectura se guarda como el desinfectante de la planta. */
+    public const DISINFECTANT_CHANNEL = 'disinfectant';
+
     /** ¿El valor cumple el setpoint? En "range" el setpoint es el mínimo y $high el máximo. */
     public function complies(float $value, float $setpoint, ?float $high = null): bool
     {
@@ -45,7 +51,13 @@ class Variable extends Model
     }
 
     /** Variables sin estado de atención: apenas salen de parámetro pasan a alarma. */
-    public const IMMEDIATE_ALARM = ['temperature'];
+    public const IMMEDIATE_ALARM = ['temperature', 'alkaline', 'ozone', 'chlorine_dioxide'];
+
+    /** Equipo del que depende la variable: solo se registra mientras ese equipo produce. */
+    public function equipmentType(): string
+    {
+        return in_array($this->key, self::DISINFECTANTS, true) ? 'llenadora' : 'lavadora';
+    }
 
     /** Segundos fuera de parámetro antes de ser alarma, según la variable y el setpoint configurado. */
     public function alarmDelay(int $configured): int

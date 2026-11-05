@@ -70,6 +70,10 @@ class Plant extends Model
     /** Devuelve la configuración, creándola con valores por defecto si no existe. */
     public function settingsOrDefault(): PlantSetting
     {
-        return $this->settings ?? $this->settings()->create();
+        if (! $this->settings) {
+            $this->setRelation('settings', $this->settings()->firstOrCreate());
+        }
+
+        return $this->settings;
     }
 }

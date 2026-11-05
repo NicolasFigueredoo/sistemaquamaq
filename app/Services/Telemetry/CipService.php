@@ -117,6 +117,25 @@ class CipService
         });
     }
 
+    /**
+     * Todas las marcas de una misma muestra. Primero se procesan las que bajan: cuando los ciclos
+     * van encadenados, el enjuague final baja en la misma muestra en la que sube el saneado siguiente.
+     *
+     * @param  list<array{equipment: string, stage: string, on: bool}>  $marks
+     * @return int cuántas marcas cambiaron algún ciclo
+     */
+    public function signals(Gateway $gateway, array $marks, CarbonImmutable $at): int
+    {
+        usort($marks, fn ($a, $b) => $a['on'] <=> $b['on']);
+
+        $changes = 0;
+        foreach ($marks as $mark) {
+            $changes += (int) $this->signal($gateway, $mark['equipment'], $mark['stage'], $mark['on'], $at);
+        }
+
+        return $changes;
+    }
+
     /** Cierra como incompletos los ciclos abiertos sin ninguna etapa activa desde hace cip.stale_minutes. */
     public function closeStale(CarbonImmutable $now): int
     {

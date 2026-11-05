@@ -42,7 +42,7 @@ const byKey = computed(() => Object.fromEntries(props.variables.map((v) => [v.ke
 const cards = computed(() => [...props.variables].sort((a, b) => a.sort - b.sort))
 const charts = computed(() => props.variables.filter((v) => v.chartSort != null).sort((a, b) => a.chartSort - b.chartSort))
 
-const dotColor = (v) => (offline.value ? 'var(--gray)' : variableColors[v.state] || 'var(--green)')
+const dotColor = (v) => (offline.value || v.stoppedEquipment ? 'var(--gray)' : variableColors[v.state] || 'var(--green)')
 const targetColor = (v) => (offline.value || v.state === 'ok' ? null : v.state === 'alarma' ? 'var(--red)' : '#c47e00')
 
 function cardValue(v) {
@@ -52,6 +52,7 @@ function cardValue(v) {
 }
 
 function cardTarget(v) {
+    if (v.stoppedEquipment) return `${v.stoppedEquipment} detenida`
     const sp = formatComma(v.setpoint, v.decimals)
     if (v.kind === 'boolean') {
         if (v.value == null) return 'Sin dato'
@@ -135,7 +136,7 @@ const go = (url) => router.visit(url)
                 <article v-for="v in cards" :key="v.key" class="measurement">
                     <div class="label"><span class="dot" :style="{ background: dotColor(v) }"></span>{{ v.shortName }}</div>
                     <div class="value">{{ cardValue(v).unit ? `${cardValue(v).value} ` : cardValue(v).value }}<span v-if="cardValue(v).unit" class="unit">{{ cardValue(v).unit }}</span></div>
-                    <div class="target" :style="targetColor(v) ? { color: targetColor(v) } : null">{{ cardTarget(v) }}<span v-if="v.kind !== 'boolean'" class="target-unit">{{ ` ${v.unit}` }}</span></div>
+                    <div class="target" :style="targetColor(v) ? { color: targetColor(v) } : null">{{ cardTarget(v) }}<span v-if="v.kind !== 'boolean' && !v.stoppedEquipment" class="target-unit">{{ ` ${v.unit}` }}</span></div>
                 </article>
             </div>
 

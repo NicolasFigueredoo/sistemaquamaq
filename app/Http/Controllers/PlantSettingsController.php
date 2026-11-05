@@ -13,6 +13,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class PlantSettingsController extends Controller
 {
@@ -25,8 +26,12 @@ class PlantSettingsController extends Controller
     ): RedirectResponse {
         abort_unless($request->user()->isAdmin(), 403);
 
-        // Solo las variables con rango definido se configuran desde el modal.
-        $editable = Variable::catalog()->filter(fn ($v) => $v->setpoint_min !== null && $v->setpoint_max !== null);
+        $disinfectant = $request->validate(['disinfectant' => ['required', Rule::in(Variable::DISINFECTANTS)]], [], ['disinfectant' => 'desinfectante'])['disinfectant'];
+
+        // Solo las variables con rango definido se configuran desde el modal, y del desinfectante solo el de la planta.
+        $editable = Variable::catalog()
+            ->filter(fn ($v) => $v->setpoint_min !== null && $v->setpoint_max !== null)
+            ->reject(fn ($v) => in_array($v->key, Variable::DISINFECTANTS, true) && $v->key !== $disinfectant);
 
         $rules = [
             'cip_period_days' => ['required', 'integer', 'min:1', 'max:30'],
@@ -47,7 +52,7 @@ class PlantSettingsController extends Controller
         $now = CarbonImmutable::now();
         $userId = $request->user()->id;
 
-        DB::transaction(function () use ($plant, $data, $editable, $ingestor, $evaluator, $status, $now, $userId) {
+        DB::transaction(function () use ($plant, $data, $disinfectant, $editable, $ingestor, $evaluator, $status, $now, $userId) {
             $changes = [];
             $settings = $plant->settingsOrDefault();
             foreach (['cip_period_days'] as $field) {
@@ -55,6 +60,12 @@ class PlantSettingsController extends Controller
                     $changes[] = [$field, $settings->{$field}, $data[$field]];
                     $settings->{$field} = $data[$field];
                 }
+            }
+            if ($settings->disinfectant !== $disinfectant) {
+                // El desinfectante anterior deja de contar para el estado de la planta.
+                $evaluator->dismiss($plant->id, Variable::catalog()[$settings->disinfectant], $now);
+                $changes[] = ["disinfectant:{$disinfectant}", null, null];
+                $settings->disinfectant = $disinfectant;
             }
             $settings->updated_by = $userId;
             $settings->save();
