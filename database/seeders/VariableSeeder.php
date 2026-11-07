@@ -28,8 +28,8 @@ class VariableSeeder extends Seeder
                 'setpoint_min' => null, 'setpoint_max' => null, 'chart_min' => null, 'chart_max' => null,
                 'chart_color' => null, 'sort' => 4, 'chart_sort' => null],
             ['key' => 'chlorine', 'name' => 'Cloro en enjuague', 'short_name' => 'Cloro en enjuague', 'alert_name' => 'Cloro en enjuague',
-                'unit' => '', 'decimals' => 0, 'kind' => 'boolean', 'rule' => 'presence', 'default_setpoint' => 1,
-                'setpoint_min' => null, 'setpoint_max' => null, 'chart_min' => null, 'chart_max' => null,
+                'unit' => 'ppm', 'decimals' => 2, 'kind' => 'boolean', 'rule' => 'min', 'default_setpoint' => 0.1,
+                'setpoint_min' => 0, 'setpoint_max' => 2, 'chart_min' => null, 'chart_max' => null,
                 'chart_color' => null, 'sort' => 5, 'chart_sort' => null],
             // Mínimo por desinfección, máximo porque por arriba transfiere gusto: alarma por baja o por alta.
             ['key' => 'chlorine_dioxide', 'name' => 'Dióxido de cloro', 'short_name' => 'Dióxido de cloro', 'alert_name' => 'Dióxido de cloro',

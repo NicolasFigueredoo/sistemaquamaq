@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\PlantStatus;
 use App\Enums\Role;
 use App\Enums\VariableState;
+use App\Models\PlantSetpoint;
 use App\Models\PlantVariableState;
 use App\Models\SetpointChange;
 use App\Models\Variable;
@@ -107,7 +108,7 @@ class PanelTest extends TestCase
 
         $admin = $this->user(Role::Admin);
         $valid = [
-            'setpoints' => ['ozone' => 0.55, 'temperature' => 60, 'alkaline' => 0.3],
+            'setpoints' => ['ozone' => 0.55, 'temperature' => 60, 'alkaline' => 0.3, 'chlorine' => 0.2],
             'setpoints_high' => ['ozone' => 1],
             'disinfectant' => 'ozone',
             'cip_period_days' => 5,
@@ -119,7 +120,8 @@ class PanelTest extends TestCase
         $state = PlantVariableState::where('plant_id', $plant->id)->where('variable_id', Variable::where('key', 'ozone')->value('id'))->first();
         $this->assertSame(VariableState::Alarma, $state->state, '0,52 ya no cumple con setpoint 0,55');
         $this->assertSame(PlantStatus::Alarma, $plant->fresh()->status);
-        $this->assertSame(2, SetpointChange::count()); // ozone, período
+        $this->assertSame(3, SetpointChange::count()); // ozone, cloro, período
+        $this->assertEqualsWithDelta(0.2, PlantSetpoint::where('plant_id', $plant->id)->where('variable_id', Variable::where('key', 'chlorine')->value('id'))->value('setpoint'), 0.0001);
         $this->assertSame($admin->id, SetpointChange::first()->user_id);
 
         $this->actingAs($admin)->put("/plantas/{$plant->code}/configuracion", array_replace_recursive($valid, ['setpoints' => ['ozone' => 2]]))
@@ -132,7 +134,7 @@ class PanelTest extends TestCase
     {
         [$plant] = $this->makePlant();
         $admin = $this->user(Role::Admin);
-        $base = ['setpoints' => ['temperature' => 60, 'alkaline' => 0.3], 'disinfectant' => 'chlorine_dioxide', 'cip_period_days' => 7];
+        $base = ['setpoints' => ['temperature' => 60, 'alkaline' => 0.3, 'chlorine' => 0.1], 'disinfectant' => 'chlorine_dioxide', 'cip_period_days' => 7];
         $put = fn (float $min, float $max) => $this->actingAs($admin)->put("/plantas/{$plant->code}/configuracion",
             array_replace_recursive($base, ['setpoints' => ['chlorine_dioxide' => $min], 'setpoints_high' => ['chlorine_dioxide' => $max]]));
 

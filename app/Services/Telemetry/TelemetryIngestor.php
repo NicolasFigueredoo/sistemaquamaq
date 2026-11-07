@@ -2,6 +2,7 @@
 
 namespace App\Services\Telemetry;
 
+use App\Models\ConnectionEvent;
 use App\Models\Gateway;
 use App\Models\MqttInbox;
 use App\Models\PlantSetpoint;
@@ -73,15 +74,20 @@ class TelemetryIngestor
     }
 
     /**
+     * Lo que llega con un corte abierto (histórico del período desconectado) se guarda para los
+     * gráficos, pero no se evalúa: durante un corte no se registran alarmas.
+     *
+     * @param  bool  $linked  false si los datos vienen de la plataforma con el equipo desconectado
      * @return int cantidad de lecturas nuevas guardadas (los duplicados no cuentan)
      */
-    public function telemetry(Gateway $gateway, mixed $payload, ?CarbonImmutable $receivedAt = null): int
+    public function telemetry(Gateway $gateway, mixed $payload, ?CarbonImmutable $receivedAt = null, bool $linked = true): int
     {
         $receivedAt ??= CarbonImmutable::now();
         $records = $this->parser->telemetry($payload, $receivedAt);
 
-        return DB::transaction(function () use ($gateway, $records, $receivedAt) {
+        return DB::transaction(function () use ($gateway, $records, $receivedAt, $linked) {
             $plant = $gateway->plant()->lockForUpdate()->firstOrFail();
+            $disconnected = ConnectionEvent::where('gateway_id', $gateway->id)->whereNull('online_at')->exists();
             $variables = Variable::catalog();
             $setpoints = $this->setpointsFor($plant->id, $variables);
             $disinfectant = $plant->settingsOrDefault()->disinfectant;
@@ -121,7 +127,9 @@ class TelemetryIngestor
 
                     $inserted++;
                     $this->addToHourly($plant->id, $variable->id, $measuredAt, $value);
-                    $this->evaluator->evaluate($plant->id, $variable, $setpoints[$variable->id], $value, $measuredAt);
+                    if (! $disconnected) {
+                        $this->evaluator->evaluate($plant->id, $variable, $setpoints[$variable->id], $value, $measuredAt);
+                    }
                 }
 
                 if (! $latest || $measuredAt->greaterThan($latest)) {
@@ -134,7 +142,9 @@ class TelemetryIngestor
                 $plant->save();
             }
 
-            $this->presence->seen($gateway, $receivedAt);
+            if ($linked) {
+                $this->presence->seen($gateway, $receivedAt);
+            }
             $this->status->refresh($plant, $receivedAt);
 
             return $inserted;

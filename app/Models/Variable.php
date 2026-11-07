@@ -38,7 +38,6 @@ class Variable extends Model
     {
         return match ($this->rule) {
             'max' => $value <= $setpoint,
-            'presence' => $value >= 0.5,
             'range' => $value >= $setpoint && ($high === null || $value <= $high),
             default => $value >= $setpoint,
         };
@@ -50,19 +49,10 @@ class Variable extends Model
         return $this->rule === 'range' && $high !== null && $value > $high ? $high : $setpoint;
     }
 
-    /** Variables sin estado de atención: apenas salen de parámetro pasan a alarma. */
-    public const IMMEDIATE_ALARM = ['temperature', 'alkaline', 'ozone', 'chlorine_dioxide'];
-
     /** Equipo del que depende la variable: solo se registra mientras ese equipo produce. */
     public function equipmentType(): string
     {
         return in_array($this->key, self::DISINFECTANTS, true) ? 'llenadora' : 'lavadora';
-    }
-
-    /** Segundos fuera de parámetro antes de ser alarma, según la variable y el setpoint configurado. */
-    public function alarmDelay(int $configured): int
-    {
-        return in_array($this->key, self::IMMEDIATE_ALARM, true) ? 0 : $configured;
     }
 
     /** Devuelve el peor de dos valores según la regla (el más alejado del cumplimiento). */

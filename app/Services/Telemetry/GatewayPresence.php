@@ -8,6 +8,8 @@ use Carbon\CarbonImmutable;
 
 class GatewayPresence
 {
+    public function __construct(private VariableEvaluator $evaluator) {}
+
     /** El gateway habló: queda online y se cierra el corte abierto, si lo había. */
     public function seen(Gateway $gateway, CarbonImmutable $at): void
     {
@@ -27,7 +29,10 @@ class GatewayPresence
         $gateway->save();
     }
 
-    /** Marca el gateway sin conexión desde $since (normalmente su último mensaje). */
+    /**
+     * Marca el gateway sin conexión desde $since (normalmente su último mensaje). Si la planta se
+     * queda sin ningún gateway en línea se cierran sus alarmas: no se registran durante el corte.
+     */
     public function offline(Gateway $gateway, CarbonImmutable $since): void
     {
         if (! $gateway->online) {
@@ -38,5 +43,9 @@ class GatewayPresence
         $gateway->save();
 
         ConnectionEvent::create(['gateway_id' => $gateway->id, 'offline_at' => $since]);
+
+        if (! Gateway::where('plant_id', $gateway->plant_id)->where('online', true)->exists()) {
+            $this->evaluator->release($gateway->plant_id, $since);
+        }
     }
 }

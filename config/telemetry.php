@@ -54,6 +54,7 @@ return [
         'io_map' => [
             53292 => 'alkaline',    // AN1 · conductividad del agua (la plataforma ya la entrega en mS/cm)
             53294 => 'temperature', // AN2 · temperatura del agua (la plataforma ya la entrega en °C)
+            53295 => 'chlorine',    // AN3 · presencia de cloro en ppm (mientras dé error de lectura, "Sin dato")
             53920 => 'disinfectant',    // AN5 · se guarda como ozono o dióxido según la planta (la plataforma ya lo entrega en ppm)
             53921 => 'effective_time',  // AN6 · tiempo efectivo de lavado (segundos)
         ],

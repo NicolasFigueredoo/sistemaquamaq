@@ -12,14 +12,12 @@ use Carbon\CarbonImmutable;
 /**
  * Máquina de estados por planta + variable:
  *
- *   ok ──(fuera de setpoint)──▶ atención ──(sigue fuera ≥ alarm_delay_s)──▶ alarma
- *    ▲                              │                                          │
- *    └─────────(vuelve a cumplir)───┴───────────(vuelve a cumplir)─────────────┘
+ *   ok ──(fuera de setpoint)──▶ alarma ──(vuelve a cumplir)──▶ ok
  *
  * En las variables con rango (mínimo y máximo) sale de parámetro tanto por baja como por alta.
- * Las variables de Variable::IMMEDIATE_ALARM no tienen atención: pasan directo a alarma (roja).
- * Solo las alarmas quedan registradas en alarm_events, con inicio = momento en que
- * salió de parámetro y fin = momento en que se normalizó.
+ * No hay estado intermedio: apenas sale de parámetro es alarma (roja) y queda registrada en
+ * alarm_events, con inicio = momento en que salió de parámetro y fin = momento en que se normalizó.
+ * Con la planta desconectada no se registran alarmas: al cortarse se cierran las abiertas (release).
  */
 class VariableEvaluator
 {
@@ -72,6 +70,26 @@ class VariableEvaluator
             return;
         }
 
+        $this->normalize($state, $at);
+
+        PlantVariableState::where('plant_id', $plantId)->where('variable_id', $variable->id)->delete();
+    }
+
+    /** La planta perdió la conexión: cierra sus alarmas abiertas. Se conserva el último valor recibido. */
+    public function release(int $plantId, CarbonImmutable $at): void
+    {
+        PlantVariableState::where('plant_id', $plantId)
+            ->where('state', '!=', VariableState::Ok->value)
+            ->get()
+            ->each(function (PlantVariableState $state) use ($at) {
+                $this->normalize($state, $at);
+                $state->save();
+            });
+    }
+
+    /** Cierra la alarma abierta, si la hay, y deja la variable en ok. */
+    private function normalize(PlantVariableState $state, CarbonImmutable $at): void
+    {
         $event = $state->open_alarm_event_id ? AlarmEvent::find($state->open_alarm_event_id) : null;
         if ($event && $event->ended_at === null) {
             $event->ended_at = $at;
@@ -79,24 +97,16 @@ class VariableEvaluator
             $event->save();
         }
 
-        PlantVariableState::where('plant_id', $plantId)->where('variable_id', $variable->id)->delete();
+        $state->state = VariableState::Ok;
+        $state->out_since = null;
+        $state->worst_value = null;
+        $state->open_alarm_event_id = null;
     }
 
     private function apply(PlantVariableState $state, Variable $variable, PlantSetpoint $setpoint, float $value, CarbonImmutable $at): void
     {
         if ($variable->complies($value, $setpoint->setpoint, $setpoint->setpoint_high)) {
-            if ($state->open_alarm_event_id) {
-                $event = AlarmEvent::find($state->open_alarm_event_id);
-                if ($event && $event->ended_at === null) {
-                    $event->ended_at = $at;
-                    $event->duration_s = max(0, (int) $event->started_at->diffInSeconds($at));
-                    $event->save();
-                }
-            }
-            $state->state = VariableState::Ok;
-            $state->out_since = null;
-            $state->worst_value = null;
-            $state->open_alarm_event_id = null;
+            $this->normalize($state, $at);
 
             return;
         }
@@ -104,15 +114,11 @@ class VariableEvaluator
         if ($state->out_since === null) {
             $state->out_since = $at;
             $state->worst_value = $value;
-            $state->state = VariableState::Atencion;
         } else {
             $state->worst_value = $variable->worse($state->worst_value ?? $value, $value, $setpoint->setpoint, $setpoint->setpoint_high);
         }
 
-        $outFor = CarbonImmutable::parse($state->out_since)->diffInSeconds($at);
-        $delay = $variable->alarmDelay($setpoint->alarm_delay_s);
-
-        if ($state->state !== VariableState::Alarma && ($delay === 0 || $outFor >= $delay)) {
+        if ($state->state !== VariableState::Alarma) {
             $state->state = VariableState::Alarma;
             $event = AlarmEvent::create([
                 'plant_id' => $state->plant_id,

@@ -47,7 +47,7 @@ const targetColor = (v) => (offline.value || v.state === 'ok' ? null : v.state =
 
 function cardValue(v) {
     if (v.value == null) return { value: '—', unit: v.unit }
-    if (v.kind === 'boolean') return { value: v.value >= 0.5 ? 'PRESENTE' : 'AUSENTE', unit: '' }
+    if (v.kind === 'boolean') return { value: v.value >= v.setpoint ? 'PRESENTE' : 'AUSENTE', unit: '' }
     return { value: formatComma(v.value, v.decimals), unit: v.unit }
 }
 
@@ -56,7 +56,7 @@ function cardTarget(v) {
     const sp = formatComma(v.setpoint, v.decimals)
     if (v.kind === 'boolean') {
         if (v.value == null) return 'Sin dato'
-        return v.value >= 0.5 ? 'Presencia confirmada' : 'Presencia no detectada'
+        return v.value >= v.setpoint ? 'Presencia confirmada' : 'Presencia no detectada'
     }
     if (v.key === 'effective_time') return `Objetivo ${sp}`
     if (v.rule === 'range') return `Rango ${sp} a ${formatComma(v.setpointHigh, v.decimals)}`
@@ -72,7 +72,7 @@ const bannerText = computed(() => {
     const label = statusLabels[props.plant.status].toUpperCase()
     if (b.variable) {
         const v = byKey.value[b.variable]
-        if (v.kind === 'boolean') return `${label} · Fuera de parámetro: ${v.alertName} no detectado · Valor configurado: presencia obligatoria.`
+        if (v.kind === 'boolean') return `${label} · Fuera de parámetro: ${v.alertName} no detectado · Valor configurado: mínimo ${formatComma(v.setpoint, v.decimals)} ${v.unit}.`
         if (v.rule === 'range') {
             const high = v.setpointHigh != null && v.value > v.setpointHigh
             return `${label} · Fuera de parámetro por ${high ? 'alta' : 'baja'}: ${v.alertName} ${formatComma(v.value, v.decimals)} ${v.unit} · Rango configurado: ${formatComma(v.setpoint, v.decimals)} a ${formatComma(v.setpointHigh, v.decimals)} ${v.unit}.`
@@ -96,7 +96,6 @@ const cipLine = (c) => {
     if (c.status === 'vencido') return `Venció: ${formatShort(c.dueAt)}`
     return `Último completo: ${formatShort(c.lastCompleteAt)}`
 }
-const nextDue = computed(() => props.cip.filter((c) => c.dueAt).sort((a, b) => a.dueAt - b.dueAt)[0])
 
 // Bloc de notas del auditor
 const noteForm = useForm({ body: props.note?.body ?? '' })
@@ -160,7 +159,7 @@ const go = (url) => router.visit(url)
                             <p>{{ cipLine(c) }}</p>
                         </div>
                     </div>
-                    <div v-if="nextDue" class="next">PRÓXIMO VENCIMIENTO<b>{{ nextDue.name }} · {{ formatShort(nextDue.dueAt) }}</b></div>
+                    <div v-if="cip.length" class="next">PRÓXIMO VENCIMIENTO<b v-for="c in cip" :key="c.type">{{ c.name }} · {{ c.dueAt ? formatShort(c.dueAt) : 'Sin ciclo completo' }}</b></div>
                 </aside>
             </div>
 
@@ -178,7 +177,7 @@ const go = (url) => router.visit(url)
                                 <td>{{ formatDateTime(e.startedAt) }}</td>
                                 <td>{{ e.endedAt ? formatDateTime(e.endedAt) : 'En curso' }}</td>
                                 <td class="duration">{{ formatDuration(e.durationS) }}</td>
-                                <td><span class="alarm-tag">{{ e.endedAt ? 'Normalizada' : 'Activa' }}</span></td>
+                                <td><span class="alarm-tag" :class="{ normalized: e.endedAt }">{{ e.endedAt ? 'Normalizada' : 'Activa' }}</span></td>
                             </tr>
                             <tr v-if="!events.length" class="empty-row"><td colspan="5">Sin alarmas en los últimos 30 días.</td></tr>
                         </tbody>

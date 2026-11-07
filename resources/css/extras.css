@@ -15,3 +15,4 @@
 .trend-days span{min-width:44px;text-align:right}
 .trend-days input{flex:1;accent-color:var(--blue);cursor:pointer}
 .field select{width:100%;border:1px solid var(--line);border-radius:9px;padding:11px 12px;color:var(--navy);background:#fff}
+.alarm-tag.normalized{background:var(--green)}

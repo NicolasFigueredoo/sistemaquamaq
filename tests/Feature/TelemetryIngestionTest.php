@@ -57,26 +57,25 @@ class TelemetryIngestionTest extends TestCase
         $this->assertTrue($gateway->fresh()->online);
     }
 
-    public function test_out_of_range_goes_attention_then_alarm_then_normalizes(): void
+    public function test_out_of_range_is_alarm_at_once_then_normalizes(): void
     {
         [$plant, $gateway] = $this->makePlant();
         $t0 = CarbonImmutable::parse('2026-10-04 12:00:00', 'UTC');
 
+        // No hay estado amarillo: la primera lectura fuera de parámetro ya es alarma registrada.
         $this->ingestor->telemetry($gateway, $this->payload($t0->getTimestampMs(), ['effective_time' => 100]), $t0);
-        $this->assertSame(VariableState::Atencion, $this->state($plant, 'effective_time')->state);
-        $this->assertSame(PlantStatus::Atencion, $plant->fresh()->status);
-        $this->assertSame(0, AlarmEvent::count(), 'atención no genera evento');
-
-        // Sigue fuera de parámetro 5 minutos (alarm_delay_s = 300 por defecto) → alarma.
-        $t1 = $t0->addMinutes(5);
-        $this->ingestor->telemetry($gateway, $this->payload($t1->getTimestampMs(), ['effective_time' => 90]), $t1);
         $this->assertSame(VariableState::Alarma, $this->state($plant, 'effective_time')->state);
         $this->assertSame(PlantStatus::Alarma, $plant->fresh()->status);
         $event = AlarmEvent::sole();
         $this->assertTrue($event->started_at->equalTo($t0), 'el evento empieza cuando salió de parámetro');
         $this->assertNull($event->ended_at);
-        $this->assertEqualsWithDelta(90, $event->worst_value, 0.001);
         $this->assertEqualsWithDelta(120, $event->setpoint_at_start, 0.001);
+
+        // Sigue fuera: no abre otro evento y guarda el peor valor.
+        $t1 = $t0->addMinutes(5);
+        $this->ingestor->telemetry($gateway, $this->payload($t1->getTimestampMs(), ['effective_time' => 90]), $t1);
+        $this->assertSame(1, AlarmEvent::count());
+        $this->assertEqualsWithDelta(90, $event->fresh()->worst_value, 0.001);
 
         // Vuelve a parámetro → se cierra el evento.
         $t2 = $t0->addMinutes(17);
@@ -86,6 +85,23 @@ class TelemetryIngestionTest extends TestCase
         $this->assertSame(17 * 60, $event->duration_s);
         $this->assertSame(VariableState::Ok, $this->state($plant, 'effective_time')->state);
         $this->assertSame(PlantStatus::Conforme, $plant->fresh()->status);
+    }
+
+    public function test_chlorine_is_present_from_its_configured_minimum(): void
+    {
+        [$plant, $gateway] = $this->makePlant(); // mínimo por defecto 0,10 ppm
+        $t = CarbonImmutable::parse('2026-10-04 12:00:00', 'UTC');
+        $send = fn (int $min, float $value) => $this->ingestor->telemetry($gateway, $this->payload($t->addMinutes($min)->getTimestampMs(), ['chlorine' => $value]), $t->addMinutes($min));
+
+        $send(0, 0.10);
+        $this->assertSame(VariableState::Ok, $this->state($plant, 'chlorine')->state, 'en 0,10 hay presencia');
+
+        $send(1, 0.09);
+        $this->assertSame(VariableState::Alarma, $this->state($plant, 'chlorine')->state);
+        $this->assertSame(1, AlarmEvent::count());
+
+        $send(2, 0.75);
+        $this->assertSame(VariableState::Ok, $this->state($plant, 'chlorine')->state);
     }
 
     public function test_temperature_goes_straight_to_alarm(): void
@@ -162,7 +178,7 @@ class TelemetryIngestionTest extends TestCase
         $this->assertSame(PlantStatus::Alarma, $plant->fresh()->status);
 
         $this->actingAs($this->user(\App\Enums\Role::Admin))->put("/plantas/{$plant->code}/configuracion", [
-            'setpoints' => ['temperature' => 60, 'alkaline' => 0.3, 'chlorine_dioxide' => 0.15],
+            'setpoints' => ['temperature' => 60, 'alkaline' => 0.3, 'chlorine' => 0.1, 'chlorine_dioxide' => 0.15],
             'setpoints_high' => ['chlorine_dioxide' => 0.30],
             'disinfectant' => 'chlorine_dioxide',
             'cip_period_days' => 7,
@@ -280,15 +296,62 @@ class TelemetryIngestionTest extends TestCase
         $this->assertSame('en_curso', CipCycle::sole()->result);
     }
 
-    public function test_short_deviation_never_becomes_an_event(): void
+    public function test_disconnection_closes_alarms_and_outage_data_opens_none(): void
     {
         [$plant, $gateway] = $this->makePlant();
-        $t0 = CarbonImmutable::parse('2026-10-04 12:00:00', 'UTC');
-        $this->ingestor->telemetry($gateway, $this->payload($t0->getTimestampMs(), ['effective_time' => 100]), $t0);
-        $this->ingestor->telemetry($gateway, $this->payload($t0->addMinutes(2)->getTimestampMs()), $t0->addMinutes(2));
+        $presence = app(\App\Services\Telemetry\GatewayPresence::class);
+        $t = CarbonImmutable::parse('2026-10-04 12:00:00', 'UTC');
+        $count = fn () => DB::table('readings')->where('variable_id', Variable::where('key', 'temperature')->value('id'))->count();
 
-        $this->assertSame(0, AlarmEvent::count());
-        $this->assertSame(PlantStatus::Conforme, $plant->fresh()->status);
+        $this->ingestor->telemetry($gateway, $this->payload($t->getTimestampMs(), ['temperature' => 20.0]), $t);
+        $event = AlarmEvent::sole();
+
+        // Se corta: la alarma se cierra en ese momento y se conserva el último valor.
+        $presence->offline($gateway->fresh(), $t->addMinutes(5));
+        $this->assertTrue($event->fresh()->ended_at->equalTo($t->addMinutes(5)));
+        $this->assertSame(VariableState::Ok, $this->state($plant, 'temperature')->state);
+        $this->assertEqualsWithDelta(20.0, (float) $this->state($plant, 'temperature')->last_value, 0.001);
+
+        // Al volver, lo medido durante el corte se guarda para los gráficos pero no abre alarmas.
+        $this->ingestor->telemetry($gateway->fresh(), $this->payload($t->addMinutes(30)->getTimestampMs(), ['temperature' => 21.0]), $t->addMinutes(60));
+        $this->assertSame(2, $count());
+        $this->assertSame(1, AlarmEvent::count());
+
+        // Con la conexión de vuelta, la siguiente lectura sí alarma.
+        $this->ingestor->telemetry($gateway->fresh(), $this->payload($t->addMinutes(61)->getTimestampMs(), ['temperature' => 22.0]), $t->addMinutes(61));
+        $this->assertSame(2, AlarmEvent::count());
+    }
+
+    public function test_exemys_history_of_a_disconnected_unit_does_not_flap_the_connection(): void
+    {
+        config([
+            'telemetry.exemys.unit_id' => 77,
+            'telemetry.exemys.username' => 'u',
+            'telemetry.exemys.password' => 'p',
+            'telemetry.exemys.data_from' => null,
+            'telemetry.exemys.io_map' => [1 => 'temperature'],
+            'telemetry.exemys.cip_map' => [],
+            'telemetry.exemys.production_map' => [],
+        ]);
+        $this->seed(\Database\Seeders\VariableSeeder::class);
+        $at = CarbonImmutable::now()->subMinutes(20)->setTimezone('America/Argentina/Buenos_Aires')->format('Y-m-d H:i:00');
+        $ios = [['id' => 1, 'desc' => 'Temperatura', 'unit' => '']];
+
+        \Illuminate\Support\Facades\Http::fake([
+            '*historyValues.php*' => ['unitID' => 77, 'unitDesc' => 'GRD', 'ios' => $ios, 'records' => [['date' => $at, 'values' => '20.0']]],
+            '*currentValues.php*' => ['unitID' => 77, 'unitDesc' => 'GRD', 'linkState' => 0, 'lastReport' => '00:20:00', 'ios' => [$ios[0] + ['val' => '20.0']]],
+        ]);
+
+        $gateway = Gateway::create([
+            'plant_id' => \App\Models\Plant::create(['code' => 'exemys', 'name' => 'Exemys', 'location' => 'x'])->id,
+            'serial' => 'EXEMYS-77', 'model' => 'Exemys', 'online' => true,
+        ]);
+        $this->artisan('exemys:sync')->assertSuccessful();
+        $this->artisan('exemys:sync')->assertSuccessful();
+
+        $this->assertFalse($gateway->fresh()->online);
+        $this->assertSame(1, ConnectionEvent::count());
+        $this->assertNull(ConnectionEvent::sole()->online_at);
     }
 
     public function test_late_backfill_is_stored_but_does_not_rewind_state(): void

@@ -54,6 +54,8 @@ class SyncExemys extends Command
         $now = CarbonImmutable::now();
 
         try {
+            $current = $client->currentValues($unitId);
+
             // ── Histórico: desde la última lectura guardada (con 1 h de solapamiento, los duplicados se descartan) ──
             $last = $gateway->plant->last_reading_at;
             $since = match (true) {
@@ -74,10 +76,10 @@ class SyncExemys extends Command
                 // "*" = registro todavía abierto en Exemys: se toma en la próxima corrida.
                 $records[] = $this->record($row['values'], $cfg, $row['date'], $row['flagged']);
             }
-            $saved = $records ? $ingestor->telemetry($gateway, ['records' => $records], $now) : 0;
+            // Con el equipo desconectado el histórico lo entrega la plataforma: no cuenta como señal de vida.
+            $saved = $records ? $ingestor->telemetry($gateway, ['records' => $records], $now, $current['online']) : 0;
 
             // ── Valor actual ──
-            $current = $client->currentValues($unitId);
             if ($current['online']) {
                 $byIo = array_column($current['ios'], 'value', 'id');
                 $at = $now->subSeconds($this->seconds($current['last_report']));
