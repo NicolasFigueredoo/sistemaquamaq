@@ -573,6 +573,65 @@ class TelemetryIngestionTest extends TestCase
         $this->assertSame(['cumplida', 'cortada', 'no_inicio', 'no_inicio'], $this->stageStatuses($plant, $cycle->id));
     }
 
+    public function test_stage_marks_do_not_count_with_cip_mode_off(): void
+    {
+        [$plant, $gateway] = $this->makePlant();
+        $cip = app(CipService::class);
+        $t = CarbonImmutable::parse('2026-11-10 15:00:00', 'UTC');
+        $cip->hold($gateway, 'llenadora', false, $t);
+        foreach (CipCycle::STAGES as $stage) {
+            $cip->signal($gateway, 'llenadora', $stage, false, $t);
+        }
+        $llenadora = $plant->equipment()->where('type', 'llenadora')->value('id');
+
+        // Modo CIP apagado: el saneado no abre ciclo ni figura en curso.
+        $this->assertFalse($cip->signal($gateway, 'llenadora', 'saneado', true, $t->addSeconds(30)));
+        $this->assertSame(0, CipCycle::count());
+        $this->assertSame([], $cip->running([$llenadora]));
+
+        // Se enciende el modo con el saneado marcado: arranca en ese momento.
+        $this->assertTrue($cip->hold($gateway, 'llenadora', true, $t->addSeconds(90)));
+        $stage = CipCycle::sole()->stages()->where('stage', 'saneado')->sole();
+        $this->assertTrue($stage->started_at->equalTo($t->addSeconds(90)));
+        $cip->signal($gateway, 'llenadora', 'saneado', false, $t->addSeconds(150));
+        $this->assertSame(60, $stage->fresh()->duration_s);
+    }
+
+    public function test_exemys_sync_turns_cip_mode_on_before_stages_of_the_same_sample(): void
+    {
+        $this->seed(\Database\Seeders\VariableSeeder::class);
+        config([
+            'telemetry.exemys.unit_id' => 77,
+            'telemetry.exemys.username' => 'u',
+            'telemetry.exemys.password' => 'p',
+            'telemetry.exemys.io_map' => [],
+            'telemetry.exemys.data_from' => null,
+            'telemetry.exemys.production_map' => [],
+            'telemetry.exemys.cip_map' => [1 => 'lavadora.saneado'],
+            'telemetry.exemys.cip_hold_map' => [9 => 'lavadora'],
+        ]);
+        $current = fn (string $saneado, string $mode) => ['unitID' => 77, 'unitDesc' => 'GRD', 'linkState' => 1, 'lastReport' => '00:00:00', 'ios' => [
+            ['id' => 1, 'desc' => 'CIP LAV Saneado', 'val' => $saneado, 'unit' => ''],
+            ['id' => 9, 'desc' => 'Modo CIP LAV', 'val' => $mode, 'unit' => ''],
+        ]];
+        \Illuminate\Support\Facades\Http::fake([
+            '*historyValues.php*' => ['unitID' => 77, 'unitDesc' => 'GRD', 'ios' => [], 'records' => []],
+            '*currentValues.php*' => \Illuminate\Support\Facades\Http::sequence()
+                ->push($current('OFF', 'OFF'))->push($current('ON', 'OFF'))->push($current('OFF', 'OFF'))->push($current('ON', 'ON')),
+        ]);
+
+        $this->artisan('exemys:sync')->assertSuccessful();
+        $this->travel(1)->minutes();
+        $this->artisan('exemys:sync')->assertSuccessful();
+        $this->assertSame(0, CipCycle::count(), 'saneado con Modo CIP apagado');
+
+        $this->travel(1)->minutes();
+        $this->artisan('exemys:sync')->assertSuccessful();
+        $this->travel(1)->minutes();
+        $this->artisan('exemys:sync')->assertSuccessful();
+        $this->assertSame(CipService::RUNNING, CipCycle::sole()->result, 'modo y saneado en la misma muestra');
+    }
+
     /** @return list<string> estado de cada etapa del ciclo, como lo ve la pantalla de CIP */
     private function stageStatuses(\App\Models\Plant $plant, int $cycleId): array
     {

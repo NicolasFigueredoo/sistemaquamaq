@@ -112,16 +112,20 @@ class CipService
             if (! $this->edge($equipment, $stage, $on, $at)) {
                 return false;
             }
+            if ($on && ! $this->cipMode($equipment)) {
+                return false; // Modo CIP apagado: la marca no cuenta (si después se enciende, arranca ahí)
+            }
 
             return $on ? $this->stageStarted($equipment, $stage, $at) : $this->stageEnded($equipment, $stage, $at);
         });
     }
 
     /**
-     * Marca "proceso CIP pendiente" del PLC. Mientras está en 1 el ciclo se sigue esperando;
-     * si baja a 0 con el ciclo sin terminar, se corta: queda incompleto con lo que se cumplió.
+     * Marca "Modo CIP" del PLC. Con el modo apagado las marcas de etapa no cuentan. Mientras está
+     * en 1 el ciclo se sigue esperando; si baja a 0 con el ciclo sin terminar, se corta: queda
+     * incompleto con lo que se cumplió. Si se enciende con una etapa ya marcada, la etapa arranca ahí.
      *
-     * @return bool si cerró un ciclo
+     * @return bool si cambió algún ciclo
      */
     public function hold(Gateway $gateway, string $equipmentType, bool $on, CarbonImmutable $at): bool
     {
@@ -129,8 +133,18 @@ class CipService
 
         return DB::transaction(function () use ($gateway, $equipmentType, $on, $at) {
             $equipment = $this->equipmentFor($gateway->plant_id, $equipmentType);
-            if (! $this->edge($equipment, self::HOLD, $on, $at) || $on) {
+            if (! $this->edge($equipment, self::HOLD, $on, $at)) {
                 return false;
+            }
+            if ($on) {
+                $active = DB::table('cip_stage_states')->where('equipment_id', $equipment->id)
+                    ->whereIn('stage', CipCycle::STAGES)->where('active', true)->pluck('stage')->all();
+                $started = false;
+                foreach (array_intersect(CipCycle::STAGES, $active) as $stage) {
+                    $started = $this->stageStarted($equipment, $stage, $at) || $started;
+                }
+
+                return $started;
             }
 
             $open = $this->openCycle($equipment);
@@ -208,10 +222,19 @@ class CipService
             ->whereIn('equipment_id', $equipmentIds)
             ->whereIn('stage', CipCycle::STAGES)
             ->where('active', true)
+            ->whereNotIn('equipment_id', DB::table('cip_stage_states')->where('stage', self::HOLD)->where('active', false)->select('equipment_id'))
             ->orderBy('changed_at')
             ->get()
             ->mapWithKeys(fn ($s) => [$s->equipment_id => ['stage' => $s->stage, 'since' => CarbonImmutable::parse($s->changed_at)]])
             ->all();
+    }
+
+    /** ¿Modo CIP encendido? Si el equipo nunca informó la marca, se toma como encendido. */
+    private function cipMode(Equipment $equipment): bool
+    {
+        $mode = DB::table('cip_stage_states')->where('equipment_id', $equipment->id)->where('stage', self::HOLD)->value('active');
+
+        return $mode === null || (bool) $mode;
     }
 
     /** Guarda la muestra de una marca y dice si cambió de estado (flanco). */

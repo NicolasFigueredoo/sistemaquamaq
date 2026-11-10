@@ -165,14 +165,23 @@ class SyncExemys extends Command
             $marks[] = ['equipment' => $equipment, 'stage' => $stage, 'on' => $byIo[$ioId] >= 0.5];
         }
 
-        $changes = $cip->signals($gateway, $marks, $at);
-
-        // Marca "proceso pendiente": después de las etapas, para que un enjuague final que termina
-        // en la misma muestra cierre el ciclo como finalizado.
+        $modes = [];
         foreach (config('telemetry.exemys.cip_hold_map', []) as $ioId => $equipment) {
             if (isset($byIo[$ioId]) && ! in_array($ioId, $skip, true)) {
-                $changes += (int) $cip->hold($gateway, $equipment, $byIo[$ioId] >= 0.5, $at);
+                $modes[$equipment] = $byIo[$ioId] >= 0.5;
             }
+        }
+
+        // Modo CIP: el que se enciende va antes que las etapas (para que un saneado que arranca en
+        // la misma muestra cuente); el que se apaga, después (un enjuague final que termina en la
+        // misma muestra cierra el ciclo como finalizado).
+        $changes = 0;
+        foreach (array_filter($modes) as $equipment => $on) {
+            $changes += (int) $cip->hold($gateway, $equipment, true, $at);
+        }
+        $changes += $cip->signals($gateway, $marks, $at);
+        foreach (array_keys(array_filter($modes, fn ($on) => ! $on)) as $equipment) {
+            $changes += (int) $cip->hold($gateway, $equipment, false, $at);
         }
 
         return $changes;
