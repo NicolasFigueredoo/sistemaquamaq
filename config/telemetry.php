@@ -55,6 +55,7 @@ return [
             53292 => 'alkaline',    // AN1 · conductividad del agua (la plataforma ya la entrega en mS/cm)
             53294 => 'temperature', // AN2 · temperatura del agua (la plataforma ya la entrega en °C)
             53295 => 'chlorine',    // AN3 · presencia de cloro en ppm (mientras dé error de lectura, "Sin dato")
+            53296 => 'peracetic',   // AN4 · ácido peracético en ppm (alarma por baja)
             53920 => 'disinfectant',    // AN5 · se guarda como ozono o dióxido según la planta (la plataforma ya lo entrega en ppm)
             53921 => 'effective_time',  // AN6 · tiempo efectivo de lavado (segundos)
         ],
@@ -70,6 +71,13 @@ return [
             53927 => 'llenadora.enjuague',       // I6 · M805
             53928 => 'llenadora.desinfeccion',   // I7 · M806
             53929 => 'llenadora.enjuague_final', // I8 · M807
+        ],
+
+        // Marca "proceso CIP pendiente" de cada equipo (ioID => equipo). Mientras está en 1 el ciclo
+        // se sigue esperando; si baja a 0 sin terminar el enjuague final, se corta como incompleto.
+        'cip_hold_map' => [
+            53935 => 'lavadora',  // Modo CIP LAV
+            53936 => 'llenadora', // Modo CIP LLEN
         ],
 
         // Equipo en producción (I9 e I10): con el equipo detenido sus variables no se registran.
@@ -99,8 +107,9 @@ return [
         'expired_plant_status' => env('TELEMETRY_CIP_EXPIRED_STATUS', 'alarma'),
         // Si un equipo nunca informó un CIP, ¿pone la planta en atención?
         'missing_is_attention' => filter_var(env('TELEMETRY_CIP_MISSING_ATTENTION', false), FILTER_VALIDATE_BOOL),
-        // Un ciclo armado desde las marcas del PLC sin ninguna etapa activa durante estos minutos se cierra incompleto.
-        'stale_minutes' => (int) env('TELEMETRY_CIP_STALE_MINUTES', 120),
+        // Un ciclo armado desde las marcas del PLC sin ninguna etapa activa durante estos minutos se cierra
+        // incompleto. 0 = nunca: el ciclo queda pendiente hasta que termine o arranque otro saneado.
+        'stale_minutes' => (int) env('TELEMETRY_CIP_STALE_MINUTES', 0),
     ],
 
     'panel' => [

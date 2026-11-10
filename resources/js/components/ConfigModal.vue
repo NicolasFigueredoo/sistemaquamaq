@@ -13,6 +13,7 @@ const byKey = Object.fromEntries(props.variables.map((v) => [v.key, v]))
 const temperature = byKey.temperature
 const alkaline = byKey.alkaline
 const chlorine = byKey.chlorine
+const peracetic = byKey.peracetic
 
 const disinfectants = props.settings.disinfectants
 
@@ -21,6 +22,7 @@ const form = useForm({
         temperature: Number(temperature?.setpoint ?? 60).toFixed(1),
         alkaline: Number(alkaline?.setpoint ?? 0.3).toFixed(1),
         chlorine: Number(chlorine?.setpoint ?? 0.1).toFixed(2),
+        ...(peracetic ? { peracetic: Number(peracetic.setpoint).toFixed(1) } : {}),
         ...Object.fromEntries(disinfectants.map((d) => [d.key, Number(d.setpoint).toFixed(2)])),
     },
     setpoints_high: Object.fromEntries(disinfectants.map((d) => [d.key, Number(d.setpointHigh ?? d.setpoint).toFixed(2)])),
@@ -66,6 +68,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
                 <label class="field"><span>{{ temperature?.name ?? 'Temperatura de lavado' }}</span><input id="temperature-setpoint-input" v-model="form.setpoints.temperature" type="number" :min="temperature?.setpointMin ?? 0" :max="temperature?.setpointMax ?? 100" step="0.1" required><small>{{ temperature?.unit ?? '°C' }}</small></label>
                 <label class="field"><span>{{ alkaline?.name ?? 'Conductividad del agua' }}</span><input id="alkaline-setpoint-input" v-model="form.setpoints.alkaline" type="number" :min="alkaline?.setpointMin ?? 0" :max="alkaline?.setpointMax ?? 20" step="0.1" required><small>{{ alkaline?.unit ?? 'mS/cm' }}</small></label>
                 <label class="field"><span>{{ chlorine?.name ?? 'Cloro en enjuague' }} · mínimo</span><input id="chlorine-setpoint-input" v-model="form.setpoints.chlorine" type="number" :min="chlorine?.setpointMin ?? 0" :max="chlorine?.setpointMax ?? 2" step="0.01" required><small>{{ chlorine?.unit ?? 'ppm' }} · desde este valor hay presencia</small></label>
+                <label v-if="peracetic" class="field"><span>{{ peracetic.name }} · mínimo</span><input id="peracetic-setpoint-input" v-model="form.setpoints.peracetic" type="number" :min="peracetic.setpointMin ?? 0" :max="peracetic.setpointMax ?? 2000" step="0.1" required><small>{{ peracetic.unit }} · alarma por baja · sensor 0 a {{ peracetic.setpointMax ?? 2000 }}</small></label>
                 <label class="field"><span>Periodicidad CIP</span><input id="period-days-input" v-model="form.cip_period_days" type="number" min="1" max="30" step="1" required><small>días desde el último ciclo completo</small></label>
             </div>
             <p class="config-note">Los setpoints se reflejan en las líneas rojas de los gráficos. El desinfectante necesita un mínimo para desinfectar y un máximo para no transferir gusto. La configuración se guarda por planta y cada cambio queda registrado con su autor.</p>

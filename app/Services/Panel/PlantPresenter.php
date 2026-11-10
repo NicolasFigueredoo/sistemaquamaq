@@ -269,6 +269,10 @@ class PlantPresenter
         ])->all();
     }
 
+    /**
+     * Historial de CIP: primero los ciclos pendientes (sin terminar), después los cerrados.
+     * Cada etapa trae su estado: cumplida (con segundos), en_curso, pendiente, no_inicio o cortada.
+     */
     public function cipHistory(Plant $plant, CarbonImmutable $now): array
     {
         $months = config('telemetry.panel.cip_history_months', 13);
@@ -276,22 +280,40 @@ class PlantPresenter
         return CipCycle::query()
             ->with(['stages', 'equipment:id,name,type'])
             ->whereHas('equipment', fn ($q) => $q->where('plant_id', $plant->id))
-            ->where('finished_at', '>=', $now->subMonths($months))
+            ->where(fn ($q) => $q->where('finished_at', '>=', $now->subMonths($months))->orWhere('result', CipService::RUNNING))
+            ->orderByRaw('finished_at IS NULL DESC')
             ->orderByDesc('finished_at')
+            ->orderByDesc('started_at')
             ->get()
-            ->map(fn (CipCycle $c) => [
-                'id' => $c->id,
-                'finishedAt' => self::ms($c->finished_at),
-                'equipment' => $c->equipment->name,
-                'result' => $c->result,
-                'totalMin' => $c->total_min,
-                'stages' => $c->stages->map(fn ($s) => [
-                    'stage' => $s->stage,
-                    'label' => CipCycle::STAGE_LABELS[$s->stage] ?? $s->stage,
-                    'minutes' => $s->duration_min,
-                    'completed' => $s->completed,
-                ])->values()->all(),
-            ])->all();
+            ->map(function (CipCycle $c) {
+                $running = $c->result === CipService::RUNNING;
+                $byStage = $c->stages->keyBy('stage');
+
+                return [
+                    'id' => $c->id,
+                    'startedAt' => self::ms($c->started_at),
+                    'finishedAt' => self::ms($c->finished_at),
+                    'equipment' => $c->equipment->name,
+                    'result' => $c->result,
+                    'closeReason' => $c->close_reason,
+                    'totalSeconds' => $c->total_s,
+                    'stages' => collect(CipCycle::STAGES)->map(function (string $key) use ($byStage, $running) {
+                        $s = $byStage->get($key);
+
+                        return [
+                            'stage' => $key,
+                            'label' => CipCycle::STAGE_LABELS[$key],
+                            'seconds' => $s?->duration_s,
+                            'completed' => (bool) $s?->completed,
+                            'status' => match (true) {
+                                (bool) $s?->completed => 'cumplida',
+                                $s?->started_at !== null && $s->ended_at === null => $running ? 'en_curso' : 'cortada',
+                                default => $running ? 'pendiente' : 'no_inicio',
+                            },
+                        ];
+                    })->all(),
+                ];
+            })->all();
     }
 
     public function permissions(User $user): array

@@ -35,7 +35,12 @@ class VariableSeeder extends Seeder
             ['key' => 'chlorine_dioxide', 'name' => 'Dióxido de cloro', 'short_name' => 'Dióxido de cloro', 'alert_name' => 'Dióxido de cloro',
                 'unit' => 'ppm', 'decimals' => 2, 'kind' => 'analog', 'rule' => 'range', 'default_setpoint' => 0.15, 'default_setpoint_high' => 0.30,
                 'setpoint_min' => 0, 'setpoint_max' => 100, 'chart_min' => 0, 'chart_max' => 0.5,
-                'chart_color' => '#2f9e6e', 'sort' => 6, 'chart_sort' => 4],
+                'chart_color' => '#2f9e6e', 'sort' => 7, 'chart_sort' => 4],
+            // Cuantitativo: alarma solo por baja. Sensor de 0 a 2000 ppm.
+            ['key' => 'peracetic', 'name' => 'Ácido peracético', 'short_name' => 'Ácido peracético', 'alert_name' => 'Ácido peracético',
+                'unit' => 'ppm', 'decimals' => 1, 'kind' => 'analog', 'rule' => 'min', 'default_setpoint' => 0.1,
+                'setpoint_min' => 0, 'setpoint_max' => 2000, 'chart_min' => 0, 'chart_max' => 2000,
+                'chart_color' => '#c2702a', 'sort' => 6, 'chart_sort' => 5],
         ];
 
         foreach ($rows as $row) {

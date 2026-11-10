@@ -165,7 +165,17 @@ class SyncExemys extends Command
             $marks[] = ['equipment' => $equipment, 'stage' => $stage, 'on' => $byIo[$ioId] >= 0.5];
         }
 
-        return $cip->signals($gateway, $marks, $at);
+        $changes = $cip->signals($gateway, $marks, $at);
+
+        // Marca "proceso pendiente": después de las etapas, para que un enjuague final que termina
+        // en la misma muestra cierre el ciclo como finalizado.
+        foreach (config('telemetry.exemys.cip_hold_map', []) as $ioId => $equipment) {
+            if (isset($byIo[$ioId]) && ! in_array($ioId, $skip, true)) {
+                $changes += (int) $cip->hold($gateway, $equipment, $byIo[$ioId] >= 0.5, $at);
+            }
+        }
+
+        return $changes;
     }
 
     private function seconds(string $hms): int

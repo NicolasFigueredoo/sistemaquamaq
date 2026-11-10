@@ -256,7 +256,7 @@ class DemoSeeder extends Seeder
                 foreach (['saneado', 'enjuague', 'desinfeccion', 'enjuague_final'] as $pos => $stage) {
                     $done = ! in_array($pos, $missing, true);
                     $total += $done ? $durations[$pos] : 0;
-                    $stages[] = ['stage' => $stage, 'position' => $pos + 1, 'duration_min' => $done ? $durations[$pos] : null, 'completed' => $done];
+                    $stages[] = ['stage' => $stage, 'position' => $pos + 1, 'duration_min' => $done ? $durations[$pos] : null, 'duration_s' => $done ? $durations[$pos] * 60 : null, 'completed' => $done];
                 }
 
                 $cycleRows[] = [
@@ -265,6 +265,7 @@ class DemoSeeder extends Seeder
                     'started_at' => $finished->subMinutes(array_sum($durations))->format('Y-m-d H:i:s'),
                     'finished_at' => $finished->format('Y-m-d H:i:s'),
                     'total_min' => $total,
+                    'total_s' => $total * 60,
                     'result' => $incomplete ? 'incompleto' : 'finalizado',
                     'created_at' => $now->format('Y-m-d H:i:s'),
                     'updated_at' => $now->format('Y-m-d H:i:s'),

@@ -60,9 +60,9 @@ class CipSignal extends Command
         $this->info($changed ? 'Marca registrada.' : 'Sin cambios (mismo estado, muestra vieja o primera muestra de la marca).');
         if ($last) {
             $this->line(sprintf('Último ciclo %s: %s', $last->plc_cycle_id, $last->result));
-            $this->table(['Etapa', 'Inicio', 'Fin', 'Min', 'Cumplida'], $last->stages->map(fn ($s) => [
+            $this->table(['Etapa', 'Inicio', 'Fin', 'Segundos', 'Cumplida'], $last->stages->map(fn ($s) => [
                 CipCycle::STAGE_LABELS[$s->stage], $s->started_at?->format('H:i:s') ?? '-', $s->ended_at?->format('H:i:s') ?? '-',
-                $s->duration_min ?? '-', $s->completed ? 'sí' : 'no',
+                $s->duration_s ?? '-', $s->completed ? 'sí' : 'no',
             ])->all());
         }
 

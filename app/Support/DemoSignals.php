@@ -57,6 +57,7 @@ class DemoSignals
             'alkaline' => self::alkaline($t, $phase),
             'effective_time' => 122 + round(sin(($t + $phase) / 5) * 1.4),
             'chlorine' => 1,
+            'peracetic' => 0.35 + round(sin(($t + $phase) / 7) * 0.05, 2),
             'chlorine_dioxide' => self::chlorineDioxide($t, $phase),
             default => 0,
         };

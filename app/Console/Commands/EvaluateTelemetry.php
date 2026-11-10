@@ -39,7 +39,7 @@ class EvaluateTelemetry extends Command
             }
         });
 
-        $this->info("Gateways marcados sin conexión: {$offline} · Ciclos CIP abandonados cerrados: {$stale} · Plantas con cambio de estado: {$changed}");
+        $this->info("Gateways marcados sin conexión: {$offline} · Ciclos CIP cerrados por inactividad: {$stale} · Plantas con cambio de estado: {$changed}");
 
         return self::SUCCESS;
     }

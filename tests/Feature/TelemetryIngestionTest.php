@@ -87,6 +87,19 @@ class TelemetryIngestionTest extends TestCase
         $this->assertSame(PlantStatus::Conforme, $plant->fresh()->status);
     }
 
+    public function test_peracetic_alarms_only_when_low(): void
+    {
+        [$plant, $gateway] = $this->makePlant(); // mínimo por defecto 0,10 ppm, sin máximo
+        $t = CarbonImmutable::parse('2026-11-10 12:00:00', 'UTC');
+        $send = fn (int $min, float $value) => $this->ingestor->telemetry($gateway, $this->payload($t->addMinutes($min)->getTimestampMs(), ['peracetic' => $value]), $t->addMinutes($min));
+
+        $send(0, 80.0);
+        $this->assertSame(VariableState::Ok, $this->state($plant, 'peracetic')->state, 'por alta no alarma');
+        $send(1, 0.05);
+        $this->assertSame(VariableState::Alarma, $this->state($plant, 'peracetic')->state);
+        $this->assertSame(1, AlarmEvent::count());
+    }
+
     public function test_chlorine_is_present_from_its_configured_minimum(): void
     {
         [$plant, $gateway] = $this->makePlant(); // mínimo por defecto 0,10 ppm
@@ -178,7 +191,7 @@ class TelemetryIngestionTest extends TestCase
         $this->assertSame(PlantStatus::Alarma, $plant->fresh()->status);
 
         $this->actingAs($this->user(\App\Enums\Role::Admin))->put("/plantas/{$plant->code}/configuracion", [
-            'setpoints' => ['temperature' => 60, 'alkaline' => 0.3, 'chlorine' => 0.1, 'chlorine_dioxide' => 0.15],
+            'setpoints' => ['temperature' => 60, 'alkaline' => 0.3, 'chlorine' => 0.1, 'peracetic' => 0.1, 'chlorine_dioxide' => 0.15],
             'setpoints_high' => ['chlorine_dioxide' => 0.30],
             'disinfectant' => 'chlorine_dioxide',
             'cip_period_days' => 7,
@@ -479,11 +492,88 @@ class TelemetryIngestionTest extends TestCase
         $this->assertSame(6, $previous->total_min);
         $this->assertSame(CipService::RUNNING, CipCycle::latest('id')->first()->result);
 
+        $this->assertSame(CipService::REASON_NEW_CYCLE, $previous->close_reason);
+        $this->assertSame(['cumplida', 'cumplida', 'no_inicio', 'no_inicio'], $this->stageStatuses($plant, $previous->id));
+
+        // Por defecto no se cierra por tiempo; con stale_minutes configurado, sí.
         $mark('saneado', 0, 33);
+        $this->assertSame(0, $cip->closeStale($t->addDays(3)), 'por defecto espera sin límite');
+        config(['telemetry.cip.stale_minutes' => 120]);
         $this->assertSame(0, $cip->closeStale($t->addMinutes(60)), 'todavía no pasaron 2 h');
         $this->assertSame(1, $cip->closeStale($t->addMinutes(33 + 121)));
         $this->assertSame(0, CipCycle::where('result', CipService::RUNNING)->count());
         $this->assertSame(1, CipCycle::where('result', 'finalizado')->count());
+    }
+
+    public function test_unfinished_cycle_waits_for_the_next_day_and_counts_seconds(): void
+    {
+        [$plant, $gateway] = $this->makePlant();
+        $cip = app(CipService::class);
+        $monday = CarbonImmutable::parse('2026-11-09 15:00:00', 'UTC');
+        $mark = fn (string $stage, int $on, CarbonImmutable $at) => $cip->signal($gateway, 'lavadora', $stage, (bool) $on, $at);
+        foreach (CipCycle::STAGES as $stage) {
+            $mark($stage, 0, $monday);
+        }
+
+        // Lunes: saneado, enjuague y desinfección; el enjuague final queda para mañana.
+        $mark('saneado', 1, $monday->addSeconds(10));
+        $mark('saneado', 0, $monday->addSeconds(55));
+        $mark('enjuague', 1, $monday->addSeconds(60));
+        $mark('enjuague', 0, $monday->addSeconds(90));
+        $mark('desinfeccion', 1, $monday->addSeconds(100));
+        $mark('desinfeccion', 0, $monday->addSeconds(1300));
+
+        $this->travelTo($monday->addDay());
+        $this->artisan('telemetry:evaluate')->assertSuccessful();
+        $cycle = CipCycle::sole();
+        $this->assertSame(CipService::RUNNING, $cycle->result, 'sigue pendiente al otro día');
+        $this->assertSame(45 + 30 + 1200, $cycle->total_s);
+        $history = app(\App\Services\Panel\PlantPresenter::class)->cipHistory($plant, CarbonImmutable::now());
+        $this->assertSame(['cumplida', 'cumplida', 'cumplida', 'pendiente'], array_column($history[0]['stages'], 'status'));
+        $this->assertSame([45, 30, 1200, null], array_column($history[0]['stages'], 'seconds'));
+
+        // Martes: se termina el enjuague final y el ciclo queda finalizado.
+        $tuesday = $monday->addDay()->addHours(2);
+        $mark('enjuague_final', 1, $tuesday);
+        $mark('enjuague_final', 0, $tuesday->addSeconds(75));
+        $cycle->refresh();
+        $this->assertSame('finalizado', $cycle->result);
+        $this->assertSame([45, 30, 1200, 75], $cycle->stages->pluck('duration_s')->all());
+        $this->assertSame(1350, $cycle->total_s);
+        $this->assertNull($cycle->close_reason);
+    }
+
+    public function test_plc_hold_mark_cuts_the_pending_cycle(): void
+    {
+        [$plant, $gateway] = $this->makePlant();
+        $cip = app(CipService::class);
+        $t = CarbonImmutable::parse('2026-11-09 15:00:00', 'UTC');
+        $cip->hold($gateway, 'lavadora', false, $t);
+        foreach (CipCycle::STAGES as $stage) {
+            $cip->signal($gateway, 'lavadora', $stage, false, $t);
+        }
+
+        $cip->hold($gateway, 'lavadora', true, $t->addSeconds(5));
+        $cip->signal($gateway, 'lavadora', 'saneado', true, $t->addSeconds(10));
+        $cip->signal($gateway, 'lavadora', 'saneado', false, $t->addSeconds(70));
+        $cip->signal($gateway, 'lavadora', 'enjuague', true, $t->addSeconds(80));
+        $lavadora = $plant->equipment()->where('type', 'lavadora')->value('id');
+        $this->assertSame('enjuague', $cip->running([$lavadora])[$lavadora]['stage'], 'la marca de proceso no cuenta como etapa');
+
+        // El PLC baja la marca de proceso con el enjuague corriendo: se corta.
+        $this->assertTrue($cip->hold($gateway, 'lavadora', false, $t->addSeconds(100)));
+        $cycle = CipCycle::sole();
+        $this->assertSame('incompleto', $cycle->result);
+        $this->assertSame(CipService::REASON_HOLD_OFF, $cycle->close_reason);
+        $this->assertSame(['cumplida', 'cortada', 'no_inicio', 'no_inicio'], $this->stageStatuses($plant, $cycle->id));
+    }
+
+    /** @return list<string> estado de cada etapa del ciclo, como lo ve la pantalla de CIP */
+    private function stageStatuses(\App\Models\Plant $plant, int $cycleId): array
+    {
+        $row = collect(app(\App\Services\Panel\PlantPresenter::class)->cipHistory($plant, CarbonImmutable::now()))->firstWhere('id', $cycleId);
+
+        return array_column($row['stages'], 'status');
     }
 
     public function test_exemys_sync_reads_plc_stage_marks(): void

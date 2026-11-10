@@ -13,17 +13,31 @@ const props = defineProps({
 })
 
 const page = usePage()
-const { formatDateTime } = useFormat()
+const { formatDateTime, formatSeconds } = useFormat()
 
 usePoll((page.props.panel?.pollSeconds || 30) * 1000, { only: ['cip', 'history', 'settings'] })
 
 const stageOrder = ['saneado', 'enjuague', 'desinfeccion', 'enjuague_final']
 const stageNames = { saneado: 'Saneado', enjuague: 'Enjuague', desinfeccion: 'Desinfección', enjuague_final: 'Enjuague final' }
 
+// Qué pasó con cada etapa que no se cumplió.
+const stageStatus = {
+    en_curso: { cell: 'En curso', why: 'en curso' },
+    pendiente: { cell: 'Pendiente', why: 'pendiente' },
+    no_inicio: { cell: 'No inició', why: 'no inició' },
+    cortada: { cell: 'Cortada', why: 'arrancó y no terminó' },
+}
+const closeReasons = {
+    nuevo_saneado: 'Se cerró porque arrancó un nuevo saneado.',
+    marca_cortada: 'Se cerró porque el PLC cortó el proceso.',
+    sin_actividad: 'Se cerró por inactividad.',
+}
+
 const rows = computed(() => props.history.map((c) => {
-    const stages = stageOrder.map((key) => c.stages.find((s) => s.stage === key) || { stage: key, completed: false, minutes: null })
-    const missing = stages.filter((s) => !s.completed).map((s) => stageNames[s.stage])
-    return { ...c, stages, missing: missing.join(' y '), incomplete: c.result !== 'finalizado' }
+    const stages = stageOrder.map((key) => c.stages.find((s) => s.stage === key) || { stage: key, completed: false, seconds: null, status: 'no_inicio' })
+    const missing = stages.filter((s) => !s.completed).map((s) => `${stageNames[s.stage]} (${stageStatus[s.status]?.why ?? 'no se cumplió'})`)
+    const running = c.result === 'en_curso'
+    return { ...c, stages, missing: missing.join(', '), running, incomplete: !running && c.result !== 'finalizado', reason: closeReasons[c.closeReason] }
 }))
 
 const dueLine = (c) => {
@@ -36,7 +50,7 @@ const go = (url) => router.visit(url)
 
 <template>
     <Head :title="`CIP · ${plant.name}`" />
-    <AppLayout subtitle="Registros finalizados de lavadora y llenadora">
+    <AppLayout subtitle="Registros de lavadora y llenadora">
         <section id="cip" class="view active">
             <div class="section-title">
                 <div>
@@ -46,7 +60,7 @@ const go = (url) => router.visit(url)
                 </div>
                 <div>
                     <button v-if="showNetworkLink" class="screen-button" type="button" @click="go('/')">MENÚ PRINCIPAL</button>
-                    <div class="update" style="margin-top:8px">Ciclos finalizados e incompletos</div>
+                    <div class="update" style="margin-top:8px">Ciclos pendientes, finalizados e incompletos</div>
                 </div>
             </div>
 
@@ -66,7 +80,7 @@ const go = (url) => router.visit(url)
 
             <article class="panel history">
                 <div class="panel-head">
-                    <div><h3>HISTORIAL DE SANEADOS</h3><span>Los ciclos incompletos se registran y detallan las etapas pendientes, pero no actualizan la periodicidad.</span></div>
+                    <div><h3>HISTORIAL DE SANEADOS</h3><span>Un ciclo sin terminar queda pendiente hasta que se cumpla la etapa que falta, aunque sea otro día. Los incompletos detallan qué etapa falló y no actualizan la periodicidad. Duraciones en segundos.</span></div>
                     <span>Período disponible: últimos 13 meses</span>
                 </div>
                 <div class="history-table-scroll">
@@ -74,15 +88,16 @@ const go = (url) => router.visit(url)
                         <thead><tr><th>Fecha</th><th>Equipo</th><th>Saneado</th><th>Enjuague</th><th>Desinfección</th><th>Enjuague final</th><th>Total</th><th>Estado</th></tr></thead>
                         <tbody id="cip-history-body">
                             <tr v-for="row in rows" :key="row.id">
-                                <td>{{ formatDateTime(row.finishedAt) }}</td>
+                                <td>{{ row.running ? `Desde ${formatDateTime(row.startedAt)}` : formatDateTime(row.finishedAt) }}</td>
                                 <td>{{ row.equipment }}</td>
                                 <template v-for="s in row.stages" :key="s.stage">
-                                    <td v-if="s.completed">{{ s.minutes }} min</td>
-                                    <td v-else class="stage-missing">No cumplido</td>
+                                    <td v-if="s.completed">{{ formatSeconds(s.seconds) }}</td>
+                                    <td v-else :class="row.running ? 'stage-pending' : 'stage-missing'">{{ stageStatus[s.status]?.cell ?? 'No cumplido' }}</td>
                                 </template>
-                                <td>{{ row.totalMin }} min{{ row.incomplete ? ' (parcial)' : '' }}</td>
+                                <td>{{ formatSeconds(row.totalSeconds) }}{{ row.result !== 'finalizado' ? ' (parcial)' : '' }}</td>
                                 <td>
-                                    <template v-if="row.incomplete"><span class="cip-result incomplete">Incompleto</span><span class="missing-stages">No se cumplió: {{ row.missing }}</span></template>
+                                    <template v-if="row.running"><span class="cip-result pending">Pendiente</span><span class="missing-stages pending">Falta: {{ row.missing }}</span></template>
+                                    <template v-else-if="row.incomplete"><span class="cip-result incomplete">Incompleto</span><span class="missing-stages">No se cumplió: {{ row.missing }}</span><span v-if="row.reason" class="missing-stages">{{ row.reason }}</span></template>
                                     <span v-else class="cip-result">Finalizado</span>
                                 </td>
                             </tr>

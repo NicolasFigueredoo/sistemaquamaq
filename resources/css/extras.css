@@ -16,3 +16,4 @@
 .trend-days input{flex:1;accent-color:var(--blue);cursor:pointer}
 .field select{width:100%;border:1px solid var(--line);border-radius:9px;padding:11px 12px;color:var(--navy);background:#fff}
 .alarm-tag.normalized{background:var(--green)}
+.cip-result.pending{background:#e8f2fa;color:#0875ae}.missing-stages.pending,.stage-pending{color:#0875ae;font-weight:800}

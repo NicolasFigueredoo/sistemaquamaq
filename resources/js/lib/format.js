@@ -1,4 +1,4 @@
-// Formatos iguales a los de la maqueta: coma decimal, "dd/mm/aaaa · hh:mm".
+// Formatos del panel: coma decimal, "dd/mm/aaaa · hh:mm:ss".
 import { usePage } from '@inertiajs/vue3'
 
 const formatters = new Map()
@@ -24,7 +24,7 @@ export function useFormat() {
     const formatDateTime = (ms) => {
         if (ms == null) return '—'
         const p = partsFor(ms, tz())
-        return `${p.day}/${p.month}/${p.year} · ${p.hour}:${p.minute}`
+        return `${p.day}/${p.month}/${p.year} · ${p.hour}:${p.minute}:${p.second}`
     }
 
     const formatShort = (ms) => {
@@ -38,15 +38,19 @@ export function useFormat() {
         return `${p.hour}:${p.minute}:${p.second}`
     }
 
+    // Duración exacta: "45 s", "3 min 05 s", "1 h 02 min 10 s".
     const formatDuration = (seconds) => {
-        const s = Math.max(0, Math.round(seconds || 0))
-        if (s < 60) return `${s} s`
-        const minutes = Math.round(s / 60)
-        if (minutes < 60) return `${minutes} min`
-        const h = Math.floor(minutes / 60)
-        const m = minutes % 60
-        return m ? `${h} h ${m} min` : `${h} h`
+        const total = Math.max(0, Math.round(seconds || 0))
+        const h = Math.floor(total / 3600)
+        const m = Math.floor((total % 3600) / 60)
+        const s = String(total % 60).padStart(2, '0')
+        if (h) return `${h} h ${String(m).padStart(2, '0')} min ${s} s`
+        if (m) return `${m} min ${s} s`
+        return `${total} s`
     }
+
+    // Solo segundos: "185 s", "1.200 s".
+    const formatSeconds = (seconds) => `${Math.max(0, Math.round(seconds || 0)).toLocaleString('es-AR')} s`
 
     const formatAgo = (ms, now) => {
         if (ms == null) return 'Sin datos recibidos'
@@ -59,7 +63,7 @@ export function useFormat() {
         return `el ${formatDateTime(ms)}`
     }
 
-    return { formatComma, formatDateTime, formatShort, formatClock, formatDuration, formatAgo }
+    return { formatComma, formatDateTime, formatShort, formatClock, formatDuration, formatSeconds, formatAgo }
 }
 
 export const statusLabels = { conforme: 'Conforme', atencion: 'Atención', sin_conexion: 'Sin conexión', alarma: 'Alarma' }

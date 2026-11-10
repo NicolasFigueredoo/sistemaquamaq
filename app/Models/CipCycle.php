@@ -17,7 +17,7 @@ class CipCycle extends Model
         'enjuague_final' => 'Enjuague final',
     ];
 
-    protected $fillable = ['equipment_id', 'plc_cycle_id', 'started_at', 'finished_at', 'total_min', 'result'];
+    protected $fillable = ['equipment_id', 'plc_cycle_id', 'started_at', 'finished_at', 'total_min', 'total_s', 'result', 'close_reason'];
 
     protected function casts(): array
     {
@@ -25,6 +25,7 @@ class CipCycle extends Model
             'started_at' => 'datetime',
             'finished_at' => 'datetime',
             'total_min' => 'integer',
+            'total_s' => 'integer',
         ];
     }
 
