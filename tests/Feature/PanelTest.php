@@ -70,7 +70,7 @@ class PanelTest extends TestCase
                 ->where('can.writeNotes', true));
 
         $this->actingAs($this->user(Role::Admin))->get("/plantas/{$plant->code}/cip")
-            ->assertOk()->assertInertia(fn (Assert $p) => $p->component('Cip')->where('settings.cipPeriodDays', 7));
+            ->assertOk()->assertInertia(fn (Assert $p) => $p->component('Cip')->where('settings.cipPeriodDays', 7)->has('serverNow')->has('plant.lastReadingAt'));
     }
 
     public function test_asociado_only_sees_own_plant(): void

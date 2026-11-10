@@ -1,6 +1,6 @@
 <script setup>
 import { Head, router, usePoll, usePage } from '@inertiajs/vue3'
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import AppLayout from '../layouts/AppLayout.vue'
 import { cipColors, useFormat } from '../lib/format'
 
@@ -9,13 +9,22 @@ const props = defineProps({
     settings: Object,
     cip: Array,
     history: Array,
+    serverNow: Number,
     showNetworkLink: Boolean,
 })
 
 const page = usePage()
-const { formatDateTime, formatDuration } = useFormat()
+const { formatDateTime, formatDuration, formatAgo } = useFormat()
 
-usePoll((page.props.panel?.pollSeconds || 30) * 1000, { only: ['cip', 'history', 'settings'] })
+usePoll((page.props.panel?.pollSeconds || 30) * 1000, { only: ['plant', 'cip', 'history', 'settings', 'serverNow'] })
+
+// Reloj para "Último dato: hace N segundos", corregido por la diferencia con el servidor.
+const offset = ref((props.serverNow ?? Date.now()) - Date.now())
+watch(() => props.serverNow, (value) => { if (value) offset.value = value - Date.now() })
+const now = ref(Date.now() + offset.value)
+let timer
+onMounted(() => { timer = setInterval(() => { now.value = Date.now() + offset.value }, 1000) })
+onBeforeUnmount(() => clearInterval(timer))
 
 const stageOrder = ['saneado', 'enjuague', 'desinfeccion', 'enjuague_final']
 const stageNames = { saneado: 'Saneado', enjuague: 'Enjuague', desinfeccion: 'Desinfección', enjuague_final: 'Enjuague final' }
@@ -60,7 +69,8 @@ const go = (url) => router.visit(url)
                 </div>
                 <div>
                     <button v-if="showNetworkLink" class="screen-button" type="button" @click="go('/')">MENÚ PRINCIPAL</button>
-                    <div class="update" style="margin-top:8px">Ciclos pendientes, finalizados e incompletos</div>
+                    <div class="update" style="margin-top:8px">Último dato: {{ formatAgo(plant.lastReadingAt, now) }}</div>
+                    <div class="update">Ciclos pendientes, finalizados e incompletos</div>
                 </div>
             </div>
 

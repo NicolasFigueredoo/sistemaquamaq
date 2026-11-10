@@ -157,6 +157,11 @@ class TelemetryIngestionTest extends TestCase
         $this->assertEqualsWithDelta(0.15, (float) $low->setpoint_at_start, 0.0001);
         $this->assertEqualsWithDelta(0.05, (float) $low->worst_value, 0.0001);
         $this->assertSame(PlantStatus::Alarma, $plant->fresh()->status);
+
+        // El historial de eventos dice si fue por alta o por baja.
+        $events = collect(app(\App\Services\Panel\PlantPresenter::class)->events($plant, $t0->addMinutes(15)))->keyBy('id');
+        $this->assertSame(['alta', 'baja'], [$events[$high->id]['direction'], $events[$low->id]['direction']]);
+        $this->assertEqualsWithDelta(0.55, $events[$high->id]['worstValue'], 0.0001);
     }
 
     public function test_shared_channel_is_stored_as_the_plant_disinfectant(): void

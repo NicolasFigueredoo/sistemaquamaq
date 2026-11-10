@@ -88,6 +88,16 @@ const bannerText = computed(() => {
 })
 const bannerClass = computed(() => ({ alarm: props.banner?.kind === 'alarm', offline: props.banner?.kind === 'offline' }))
 
+// Motivo de cada alarma del historial: por baja o por alta, con el peor valor y el límite cruzado.
+function eventReason(e) {
+    const fmt = (n) => `${formatComma(n, e.decimals)}${e.unit ? ` ${e.unit}` : ''}`
+    if (e.limit == null) return ''
+    if (e.kind === 'boolean') return `No detectado · mín. ${fmt(e.limit)}`
+    const head = `Por ${e.direction}`
+    if (e.worstValue == null) return head
+    return `${head} · ${fmt(e.worstValue)} (${e.direction === 'alta' ? 'máx.' : 'mín.'} ${fmt(e.limit)})`
+}
+
 // Control semanal CIP (columna derecha)
 const cipLine = (c) => {
     if (c.running) return `En curso · ${c.running.label} desde ${formatShort(c.running.since)}`
@@ -170,16 +180,17 @@ const go = (url) => router.visit(url)
                 </div>
                 <div class="events-scroll">
                     <table class="events-table">
-                        <thead><tr><th>Variable</th><th>Inicio de la alarma</th><th>Finalización / normalización</th><th>Duración</th><th>Estado</th></tr></thead>
+                        <thead><tr><th>Variable</th><th>Motivo</th><th>Inicio de la alarma</th><th>Finalización / normalización</th><th>Duración</th><th>Estado</th></tr></thead>
                         <tbody>
                             <tr v-for="e in events" :key="e.id">
                                 <td class="event-var">{{ e.variable }}</td>
+                                <td class="event-reason">{{ eventReason(e) }}</td>
                                 <td>{{ formatDateTime(e.startedAt) }}</td>
                                 <td>{{ e.endedAt ? formatDateTime(e.endedAt) : 'En curso' }}</td>
                                 <td class="duration">{{ formatDuration(e.durationS) }}</td>
                                 <td><span class="alarm-tag" :class="{ normalized: e.endedAt }">{{ e.endedAt ? 'Normalizada' : 'Activa' }}</span></td>
                             </tr>
-                            <tr v-if="!events.length" class="empty-row"><td colspan="5">Sin alarmas en los últimos 30 días.</td></tr>
+                            <tr v-if="!events.length" class="empty-row"><td colspan="6">Sin alarmas en los últimos 30 días.</td></tr>
                         </tbody>
                     </table>
                 </div>

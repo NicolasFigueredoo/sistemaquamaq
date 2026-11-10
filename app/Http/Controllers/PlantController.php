@@ -48,6 +48,7 @@ class PlantController extends Controller
             'settings' => $this->presenter->settings($plant),
             'cip' => $this->presenter->cipStatus($plant, $now),
             'history' => $this->presenter->cipHistory($plant, $now),
+            'serverNow' => $now->getTimestampMs(),
             'showNetworkLink' => $request->user()->seesAllPlants() || $request->user()->plants()->count() > 1,
         ]);
     }

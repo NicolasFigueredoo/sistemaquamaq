@@ -212,7 +212,7 @@ class PlantPresenter
         $days = config('telemetry.panel.events_days', 30);
 
         return AlarmEvent::query()
-            ->with('variable:id,name')
+            ->with('variable:id,name,unit,decimals,kind,rule')
             ->where('plant_id', $plant->id)
             ->where('started_at', '>=', $now->subDays($days))
             ->orderByDesc('started_at')
@@ -221,6 +221,13 @@ class PlantPresenter
             ->map(fn (AlarmEvent $e) => [
                 'id' => $e->id,
                 'variable' => $e->variable?->name,
+                // Por alta si el peor valor quedó arriba del límite que se cruzó; si no, por baja.
+                'direction' => $e->worst_value !== null && $e->setpoint_at_start !== null && (float) $e->worst_value > (float) $e->setpoint_at_start ? 'alta' : 'baja',
+                'worstValue' => $e->worst_value === null ? null : (float) $e->worst_value,
+                'limit' => $e->setpoint_at_start === null ? null : (float) $e->setpoint_at_start,
+                'unit' => $e->variable?->unit,
+                'decimals' => $e->variable?->decimals ?? 2,
+                'kind' => $e->variable?->kind,
                 'startedAt' => self::ms($e->started_at),
                 'endedAt' => self::ms($e->ended_at),
                 'durationS' => $e->ended_at
