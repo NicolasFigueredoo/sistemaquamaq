@@ -13,7 +13,7 @@ const props = defineProps({
 })
 
 const page = usePage()
-const { formatDateTime, formatSeconds } = useFormat()
+const { formatDateTime, formatDuration } = useFormat()
 
 usePoll((page.props.panel?.pollSeconds || 30) * 1000, { only: ['cip', 'history', 'settings'] })
 
@@ -80,7 +80,7 @@ const go = (url) => router.visit(url)
 
             <article class="panel history">
                 <div class="panel-head">
-                    <div><h3>HISTORIAL DE SANEADOS</h3><span>Un ciclo sin terminar queda pendiente hasta que se cumpla la etapa que falta, aunque sea otro día. Los incompletos detallan qué etapa falló y no actualizan la periodicidad. Duraciones en segundos.</span></div>
+                    <div><h3>HISTORIAL DE SANEADOS</h3><span>Un ciclo sin terminar queda pendiente hasta que se cumpla la etapa que falta, aunque sea otro día. Los incompletos detallan qué etapa falló y no actualizan la periodicidad. Duraciones con precisión de segundos.</span></div>
                     <span>Período disponible: últimos 13 meses</span>
                 </div>
                 <div class="history-table-scroll">
@@ -91,10 +91,10 @@ const go = (url) => router.visit(url)
                                 <td>{{ row.running ? `Desde ${formatDateTime(row.startedAt)}` : formatDateTime(row.finishedAt) }}</td>
                                 <td>{{ row.equipment }}</td>
                                 <template v-for="s in row.stages" :key="s.stage">
-                                    <td v-if="s.completed">{{ formatSeconds(s.seconds) }}</td>
+                                    <td v-if="s.completed">{{ formatDuration(s.seconds) }}</td>
                                     <td v-else :class="row.running ? 'stage-pending' : 'stage-missing'">{{ stageStatus[s.status]?.cell ?? 'No cumplido' }}</td>
                                 </template>
-                                <td>{{ formatSeconds(row.totalSeconds) }}{{ row.result !== 'finalizado' ? ' (parcial)' : '' }}</td>
+                                <td>{{ formatDuration(row.totalSeconds) }}{{ row.result !== 'finalizado' ? ' (parcial)' : '' }}</td>
                                 <td>
                                     <template v-if="row.running"><span class="cip-result pending">Pendiente</span><span class="missing-stages pending">Falta: {{ row.missing }}</span></template>
                                     <template v-else-if="row.incomplete"><span class="cip-result incomplete">Incompleto</span><span class="missing-stages">No se cumplió: {{ row.missing }}</span><span v-if="row.reason" class="missing-stages">{{ row.reason }}</span></template>
