@@ -26,7 +26,7 @@ class PanelTest extends TestCase
 
         $user = $this->user(Role::Admin);
         $this->post('/login', ['username' => $user->username, 'password' => 'mal'])
-            ->assertSessionHasErrors(['username' => 'Usuario o contraseña incorrectos.']);
+            ->assertSessionHasErrors(['username' => 'Usuario, mail o contraseña incorrectos.']);
         $this->post('/login', ['username' => $user->username, 'password' => 'secreto123'])->assertRedirect('/');
         $this->assertAuthenticatedAs($user);
 

@@ -18,3 +18,16 @@
 .alarm-tag.normalized{background:var(--green)}
 .cip-result.pending{background:#e8f2fa;color:#0875ae}.missing-stages.pending,.stage-pending{color:#0875ae;font-weight:800}
 .event-reason{color:var(--red);font-weight:700;white-space:normal;overflow-wrap:anywhere;line-height:1.35}
+/* Login por usuario o mail, Mi perfil y Olvidé mi contraseña. */
+.form-status{margin:0 0 12px;padding:10px 12px;border-radius:9px;background:#e7f6ef;color:#0f7a51;font-size:12px;font-weight:700}
+.login-link{margin:12px 0 0;text-align:center;font-size:12px;color:var(--muted)}
+.login-link a,.link-button{color:var(--blue);font-weight:700;text-decoration:none}
+.link-button{border:0;background:none;padding:0;font:inherit;font-size:12px}
+.login-help.left{text-align:left;margin:0}
+.support-box{margin-top:18px;padding:12px;border:1px dashed var(--line);border-radius:9px;font-size:12px;color:var(--muted)}
+.support-box b{color:var(--navy)}.support-box p{margin:5px 0 0;overflow-wrap:anywhere}.support-box a{color:var(--blue);font-weight:700}
+.profile-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;max-width:980px}
+.profile-grid .panel form{margin-top:4px}
+.profile-note{font-size:12px;color:var(--muted);margin:0 0 6px;overflow-wrap:anywhere}.profile-note b{color:var(--navy)}
+.back-link{color:var(--blue);font-weight:800;font-size:12px;text-decoration:none}
+@media(max-width:760px){.profile-grid{grid-template-columns:1fr}}

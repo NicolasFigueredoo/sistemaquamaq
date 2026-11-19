@@ -123,4 +123,15 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    /*
+    | Contacto del proveedor del servicio: se muestra a quien olvidó su
+    | contraseña y no tiene (o no recuerda) el mail registrado.
+    */
+
+    'support' => [
+        'name' => env('SUPPORT_NAME', 'Quamaq Soluciones Tecnológicas'),
+        'email' => env('SUPPORT_EMAIL'),
+        'phone' => env('SUPPORT_PHONE'),
+    ],
+
 ];

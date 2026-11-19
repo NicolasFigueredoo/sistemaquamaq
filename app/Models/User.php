@@ -25,6 +25,17 @@ class User extends Authenticatable
         ];
     }
 
+    /** Busca un usuario activo por nombre de usuario o, si el dato tiene "@", por mail. */
+    public static function findForLogin(string $login): ?self
+    {
+        $login = trim($login);
+        $column = str_contains($login, '@') ? 'email' : 'username';
+
+        return static::query()->where('active', true)
+            ->where($column, $column === 'email' ? mb_strtolower($login) : $login)
+            ->first();
+    }
+
     public function plants(): BelongsToMany
     {
         return $this->belongsToMany(Plant::class);

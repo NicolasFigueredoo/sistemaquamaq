@@ -1,9 +1,11 @@
 <script setup>
-import { Head, useForm } from '@inertiajs/vue3'
+import { Head, Link, useForm, usePage } from '@inertiajs/vue3'
 import { computed, onMounted, ref } from 'vue'
 
 defineProps({ demoAccess: Boolean })
 
+const page = usePage()
+const status = computed(() => page.props.flash?.status)
 const form = useForm({ username: '', password: '' })
 const userInput = ref(null)
 const error = computed(() => form.errors.username || form.errors.password || '')
@@ -28,10 +30,12 @@ onMounted(() => userInput.value?.focus())
                 <h1>IVESS CONECTA 4.0</h1>
                 <p>Acceso seguro a la plataforma de monitoreo</p>
             </div>
-            <label class="field"><span>Usuario</span><input id="login-user" ref="userInput" v-model="form.username" type="text" autocomplete="username" required></label>
+            <p v-if="status" class="form-status" role="status">{{ status }}</p>
+            <label class="field"><span>Usuario o mail</span><input id="login-user" ref="userInput" v-model="form.username" type="text" autocomplete="username" required></label>
             <label class="field"><span>Contraseña</span><input id="login-password" v-model="form.password" type="password" autocomplete="current-password" required></label>
             <button class="login-button" type="submit" :disabled="form.processing">INGRESAR</button>
             <div class="login-error" role="alert">{{ error }}</div>
+            <p class="login-link"><Link href="/olvide-contrasena">¿Olvidaste tu contraseña?</Link></p>
             <p v-if="demoAccess" class="login-help">Acceso demostrativo: usuario <b>admin</b> · contraseña <b>IVESS40</b></p>
         </form>
     </section>

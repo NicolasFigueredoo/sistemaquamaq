@@ -5,7 +5,9 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use App\Models\User;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -24,7 +26,7 @@ class LoginController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $data = $request->validate([
-            'username' => ['required', 'string', 'max:60'],
+            'username' => ['required', 'string', 'max:255'], // usuario o mail
             'password' => ['required', 'string'],
         ]);
 
@@ -35,10 +37,13 @@ class LoginController extends Controller
             ]);
         }
 
-        if (! Auth::attempt(['username' => $data['username'], 'password' => $data['password'], 'active' => true], true)) {
+        $user = User::findForLogin($data['username']);
+        if (! $user || ! Hash::check($data['password'], $user->password)) {
             RateLimiter::hit($key, 60);
-            throw ValidationException::withMessages(['username' => 'Usuario o contraseña incorrectos.']);
+            throw ValidationException::withMessages(['username' => 'Usuario, mail o contraseña incorrectos.']);
         }
+
+        Auth::login($user, true);
 
         RateLimiter::clear($key);
         $request->session()->regenerate();

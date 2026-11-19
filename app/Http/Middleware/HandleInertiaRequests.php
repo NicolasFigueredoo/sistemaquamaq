@@ -23,6 +23,9 @@ class HandleInertiaRequests extends Middleware
             'auth' => [
                 'user' => $user ? ['name' => $user->name, 'role' => $user->role->value] : null,
             ],
+            'flash' => [
+                'status' => fn () => $request->session()->get('status'),
+            ],
             'panel' => [
                 'timezone' => config('telemetry.display_timezone'),
                 'pollSeconds' => config('telemetry.panel.poll_seconds'),

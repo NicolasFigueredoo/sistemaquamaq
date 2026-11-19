@@ -18,7 +18,10 @@ const logout = () => router.post('/logout')
             </div>
             <div class="quamaq">
                 <img class="brand-logo quamaq-logo" src="/img/quamaq.jpg" alt="Quamaq Soluciones Tecnológicas">
-                <div class="top-actions"><button type="button" @click="logout">SALIR</button></div>
+                <div class="top-actions">
+                    <button type="button" @click="router.visit('/perfil')">MI PERFIL</button>
+                    <button type="button" @click="logout">SALIR</button>
+                </div>
             </div>
         </header>
         <main>
