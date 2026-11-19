@@ -37,6 +37,16 @@ Abrí **http://localhost:8000**.
 | `auditor` | `Auditor40` | Auditor: ve todo y escribe notas, no configura |
 | `jumillano` | `Jumillano40` | Asociado: solo su planta (El Jumillano), lectura |
 
+Usuarios del prototipo en Szykula Aguas Escobar S.A. (planta de la unidad Exemys, `/plantas/szykula-aguas-escobar-sa`). No los crea el seeder; la contraseña es igual al usuario:
+
+```bash
+php artisan ivess:user szykula   --name="Szykula Aguas Escobar S.A." --role=asociado --plant=szykula-aguas-escobar-sa --password=szykula
+php artisan ivess:user monitoreo --name="Monitoreo general" --role=pantalla --password=monitoreo
+```
+
+- `szykula` (asociado): solo su planta y su pantalla CIP. No ve EXEMYS, CONFIGURAR ALARMAS ni el bloc de notas del auditor.
+- `monitoreo` (pantalla): solo la pantalla principal de la red. No puede entrar al detalle de ninguna planta.
+
 Con `composer dev` corriendo, el simulador manda datos cada 10 s: vas a ver plantas que entran en atención, pasan a alarma a los 5 minutos y se normalizan, igual que pasaría con los equipos reales. El panel se actualiza solo cada 30 s.
 
 > Si preferís correr cada cosa por separado: `php artisan serve`, `npm run dev`, `php artisan schedule:work` y `php artisan telemetry:simulate --loop`.

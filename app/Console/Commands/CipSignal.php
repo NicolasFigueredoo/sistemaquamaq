@@ -12,7 +12,7 @@ use Throwable;
 
 /**
  * Simula a mano una marca de etapa del PLC (lo mismo que llega por Exemys), para probar el CIP sin el equipo.
- * Ej.: php artisan cip:signal quamaq-prueba-exemys lavadora saneado 1
+ * Ej.: php artisan cip:signal szykula-aguas-escobar-sa lavadora saneado 1
  */
 class CipSignal extends Command
 {

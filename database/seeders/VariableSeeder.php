@@ -16,7 +16,7 @@ class VariableSeeder extends Seeder
                 'setpoint_min' => 0, 'setpoint_max' => 100, 'chart_min' => 0.30, 'chart_max' => 0.80,
                 'chart_color' => '#0b7fba', 'sort' => 1, 'chart_sort' => 1],
             ['key' => 'alkaline', 'name' => 'Conductividad del agua', 'short_name' => 'Conductividad del agua', 'alert_name' => 'Conductividad del agua',
-                'unit' => 'mS/cm', 'decimals' => 1, 'kind' => 'analog', 'rule' => 'min', 'default_setpoint' => 0.3,
+                'unit' => 'mS/cm', 'decimals' => 2, 'kind' => 'analog', 'rule' => 'min', 'default_setpoint' => 0.3,
                 'setpoint_min' => 0, 'setpoint_max' => 20, 'chart_min' => 0, 'chart_max' => 20,
                 'chart_color' => '#7b62c7', 'sort' => 2, 'chart_sort' => 3],
             ['key' => 'temperature', 'name' => 'Temperatura de lavado', 'short_name' => 'Temperatura lavado', 'alert_name' => 'Temperatura de lavado',
@@ -38,7 +38,7 @@ class VariableSeeder extends Seeder
                 'chart_color' => '#2f9e6e', 'sort' => 7, 'chart_sort' => 4],
             // Cuantitativo: alarma solo por baja. Sensor de 0 a 2000 ppm.
             ['key' => 'peracetic', 'name' => 'Ácido peracético', 'short_name' => 'Ácido peracético', 'alert_name' => 'Ácido peracético',
-                'unit' => 'ppm', 'decimals' => 1, 'kind' => 'analog', 'rule' => 'min', 'default_setpoint' => 0.1,
+                'unit' => 'ppm', 'decimals' => 0, 'kind' => 'analog', 'rule' => 'min', 'default_setpoint' => 1,
                 'setpoint_min' => 0, 'setpoint_max' => 2000, 'chart_min' => 0, 'chart_max' => 2000,
                 'chart_color' => '#c2702a', 'sort' => 6, 'chart_sort' => 5],
         ];

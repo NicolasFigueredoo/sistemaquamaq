@@ -180,6 +180,7 @@ const go = (url) => router.visit(url)
                 </div>
                 <div class="events-scroll">
                     <table class="events-table">
+                        <colgroup><col style="width:15%"><col style="width:27%"><col style="width:16%"><col style="width:16%"><col style="width:12%"><col style="width:14%"></colgroup>
                         <thead><tr><th>Variable</th><th>Motivo</th><th>Inicio de la alarma</th><th>Finalización / normalización</th><th>Duración</th><th>Estado</th></tr></thead>
                         <tbody>
                             <tr v-for="e in events" :key="e.id">
@@ -199,7 +200,6 @@ const go = (url) => router.visit(url)
             <article v-if="can.writeNotes" class="panel auditor-notes">
                 <div class="panel-head">
                     <div><h3>BLOC DE NOTAS DEL AUDITOR</h3><span>Observaciones independientes para esta planta.</span></div>
-                    <span id="notes-plant-name">{{ plant.name }}</span>
                 </div>
                 <textarea id="auditor-notes-input" v-model="noteForm.body" placeholder="Escriba observaciones, tareas pendientes o conclusiones de la auditoría..."></textarea>
                 <div class="notes-actions">

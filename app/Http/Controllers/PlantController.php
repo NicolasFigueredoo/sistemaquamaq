@@ -30,7 +30,7 @@ class PlantController extends Controller
             'cip' => $cip,
             'chart' => $this->presenter->series($plant, $now),
             'events' => $this->presenter->events($plant, $now),
-            'note' => $this->presenter->note($plant),
+            'note' => $request->user()->canWriteNotes() ? $this->presenter->note($plant) : null,
             'can' => $this->presenter->permissions($request->user()),
             'serverNow' => $now->getTimestampMs(),
             'exemysTest' => $request->user()->isAdmin() && $plant->gateways()->where('model', SyncExemys::GATEWAY_MODEL)->exists(),

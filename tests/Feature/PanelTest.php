@@ -108,7 +108,7 @@ class PanelTest extends TestCase
 
         $admin = $this->user(Role::Admin);
         $valid = [
-            'setpoints' => ['ozone' => 0.55, 'temperature' => 60, 'alkaline' => 0.3, 'chlorine' => 0.2, 'peracetic' => 0.1],
+            'setpoints' => ['ozone' => 0.55, 'temperature' => 60, 'alkaline' => 0.3, 'chlorine' => 0.2, 'peracetic' => 1],
             'setpoints_high' => ['ozone' => 1],
             'disinfectant' => 'ozone',
             'cip_period_days' => 5,
@@ -134,7 +134,7 @@ class PanelTest extends TestCase
     {
         [$plant] = $this->makePlant();
         $admin = $this->user(Role::Admin);
-        $base = ['setpoints' => ['temperature' => 60, 'alkaline' => 0.3, 'chlorine' => 0.1, 'peracetic' => 0.1], 'disinfectant' => 'chlorine_dioxide', 'cip_period_days' => 7];
+        $base = ['setpoints' => ['temperature' => 60, 'alkaline' => 0.3, 'chlorine' => 0.1, 'peracetic' => 1], 'disinfectant' => 'chlorine_dioxide', 'cip_period_days' => 7];
         $put = fn (float $min, float $max) => $this->actingAs($admin)->put("/plantas/{$plant->code}/configuracion",
             array_replace_recursive($base, ['setpoints' => ['chlorine_dioxide' => $min], 'setpoints_high' => ['chlorine_dioxide' => $max]]));
 

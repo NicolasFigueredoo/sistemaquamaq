@@ -47,8 +47,8 @@ return [
         'ca_bundle' => env('EXEMYS_CA_BUNDLE') ?: resource_path('certs/exemys-ca.pem'),
 
         // Planta que se alimenta de esta unidad (`php artisan exemys:sync` la crea si no existe).
-        'plant_name' => env('EXEMYS_PLANT_NAME', 'Quamaq · Prueba Exemys'),
-        'plant_location' => env('EXEMYS_PLANT_LOCATION', 'GRD210'),
+        'plant_name' => env('EXEMYS_PLANT_NAME', 'Szykula Aguas Escobar S.A.'),
+        'plant_location' => env('EXEMYS_PLANT_LOCATION', 'Escobar'),
 
         // Canal de Exemys (ioID) => key de la variable del panel. Los canales sin mapear se ignoran.
         'io_map' => [
