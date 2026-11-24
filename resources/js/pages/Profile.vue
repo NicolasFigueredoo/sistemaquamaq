@@ -67,7 +67,7 @@ const passwordError = computed(() => passwordCodeForm.errors.password_code || pa
                     <div class="panel-head"><h3>CONTRASEÑA</h3></div>
                     <template v-if="profile.email">
                         <p class="profile-note">Para cambiarla te mandamos un código a <b>{{ profile.email }}</b>, así confirmamos que sos vos.</p>
-                        <button class="save-button" type="button" :disabled="passwordCodeForm.processing" @click="sendPasswordCode">
+                        <button class="save-button" :class="{ 'profile-bottom': !pendingEmail && !passwordCodeSent }" type="button" :disabled="passwordCodeForm.processing" @click="sendPasswordCode">
                             {{ passwordCodeSent ? 'REENVIAR CÓDIGO' : 'ENVIAR CÓDIGO' }}
                         </button>
                         <form v-if="passwordCodeSent" @submit.prevent="changePassword">
