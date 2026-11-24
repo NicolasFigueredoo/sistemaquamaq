@@ -10,11 +10,11 @@ use Carbon\CarbonImmutable;
 
 /**
  * Calcula el estado de la planta que se ve en la red nacional. Prioridad:
- *   - Sin gateway online → "sin conexión" (los valores no son confiables).
+ *   - Sin gateway online → "sin conexión": sin datos no se sabe si las variables están bien ni si se
+ *     hizo el CIP durante el corte. Al volver la conexión el estado se recalcula solo.
  *   - Alguna variable en alarma, o CIP vencido → "alarma".
  *   - Alguna variable en atención, o CIP próximo a vencer → "atención".
  *   - Si no, "conforme".
- * Un CIP vencido gana incluso a "sin conexión", porque no depende del enlace.
  */
 class PlantStatusService
 {
@@ -49,7 +49,7 @@ class PlantStatusService
         }
 
         if (! $online) {
-            return $cipRank === PlantStatus::Alarma->rank() ? PlantStatus::Alarma : PlantStatus::SinConexion;
+            return PlantStatus::SinConexion;
         }
 
         return PlantStatus::fromRank(max($variableRank, $cipRank));

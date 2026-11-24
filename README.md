@@ -100,7 +100,7 @@ php artisan ivess:user jumillano --role=asociado --plant=el-jumillano-sa
 | Gateway sin datos más de 10 min (`offline_after_minutes`) o Last Will `offline` | **Sin conexión**. Se registra el corte en `connection_events`. |
 | CIP: último ciclo **completo** + N días (a la misma hora) | Últimas 24 h → **Próximo a vencer** (planta en atención). Pasado → **Vencido** (planta en alarma, configurable con `TELEMETRY_CIP_EXPIRED_STATUS`). Los ciclos incompletos se muestran pero no renuevan la vigencia. |
 
-El estado de la planta es el peor de todos. "Sin conexión" tapa los estados de variables (no hay valor confiable), salvo un CIP vencido.
+El estado de la planta es el peor de todos. "Sin conexión" tapa todo lo demás, incluso un CIP vencido: sin datos no se sabe si el CIP se hizo durante el corte. El vencimiento se sigue viendo en el detalle de la planta.
 
 Cuando el admin cambia un setpoint desde **Configurar alarmas**, el último valor se vuelve a juzgar contra el nuevo, y cada cambio queda en `setpoint_changes` con usuario y hora.
 

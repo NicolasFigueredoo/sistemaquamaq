@@ -446,8 +446,13 @@ class TelemetryIngestionTest extends TestCase
         $this->ingestor->cipCycle($gateway, $cycle('F3', 'llenadora', $now, $full), $now);
         $this->assertSame(PlantStatus::Conforme, $plant->fresh()->status);
 
-        // Vencido (8 días sin CIP de lavadora) → alarma.
+        // Vencido (8 días sin CIP de lavadora) con el equipo desconectado → sin conexión: no se sabe si el CIP se hizo.
         $this->travelTo($now->addDays(6));
+        $this->artisan('telemetry:evaluate');
+        $this->assertSame(PlantStatus::SinConexion, $plant->fresh()->status);
+
+        // Al volver la conexión → alarma por CIP vencido.
+        app(\App\Services\Telemetry\GatewayPresence::class)->seen($gateway->refresh(), CarbonImmutable::now());
         $this->artisan('telemetry:evaluate');
         $this->assertSame(PlantStatus::Alarma, $plant->fresh()->status);
     }
