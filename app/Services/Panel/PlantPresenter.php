@@ -259,13 +259,16 @@ class PlantPresenter
         ];
     }
 
-    /** Desinfectantes que se pueden elegir en la configuración, con sus setpoints en esta planta. */
+    /**
+     * El desinfectante de la planta con sus setpoints. Es uno solo: la planta con dióxido no ve ozono
+     * (ni al revés), para no mostrar opciones que no corresponden.
+     */
     private function disinfectants(Plant $plant): array
     {
         $variables = Variable::catalog();
         $setpoints = $this->ingestor->setpointsFor($plant->id, $variables);
 
-        return $variables->toBase()->only(Variable::DISINFECTANTS)->values()->map(fn (Variable $v) => [
+        return $variables->toBase()->only([$plant->settingsOrDefault()->disinfectant])->values()->map(fn (Variable $v) => [
             'key' => $v->key,
             'name' => $v->name,
             'unit' => $v->unit,

@@ -9,7 +9,7 @@ use Illuminate\Console\Command;
 
 class CreateUser extends Command
 {
-    protected $signature = 'ivess:user {username} {--name=} {--role=asociado : admin | auditor | asociado | pantalla} {--plant=* : código de planta (asociados)} {--password=}';
+    protected $signature = 'ivess:user {username} {--name=} {--role=asociado : admin | auditor | asociado | pantalla} {--plant=* : código de planta (asociados)} {--password=} {--email= : mail para recuperar la contraseña y recibir códigos}';
 
     protected $description = 'Crea o actualiza un usuario del panel.';
 
@@ -22,10 +22,18 @@ class CreateUser extends Command
             return self::FAILURE;
         }
 
+        $email = $this->option('email') ? mb_strtolower(trim($this->option('email'))) : null;
+        if ($email && ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $this->error('Mail inválido.');
+
+            return self::FAILURE;
+        }
+
         $password = $this->option('password') ?: $this->secret('Contraseña');
         $user = User::updateOrCreate(
             ['username' => $this->argument('username')],
-            ['name' => $this->option('name') ?: $this->argument('username'), 'role' => $role, 'password' => $password, 'active' => true],
+            ['name' => $this->option('name') ?: $this->argument('username'), 'role' => $role, 'password' => $password, 'active' => true]
+                + ($email ? ['email' => $email, 'email_verified_at' => now()] : []),
         );
 
         if ($codes = $this->option('plant')) {

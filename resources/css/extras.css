@@ -31,3 +31,4 @@
 .profile-note{font-size:12px;color:var(--muted);margin:0 0 6px;overflow-wrap:anywhere}.profile-note b{color:var(--navy)}
 .back-link{color:var(--blue);font-weight:800;font-size:12px;text-decoration:none}
 @media(max-width:760px){.profile-grid{grid-template-columns:1fr}}
+.field input[readonly]{background:#f3f8fb;color:var(--muted);cursor:default}

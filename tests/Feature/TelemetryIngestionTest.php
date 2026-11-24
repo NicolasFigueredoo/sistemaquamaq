@@ -195,16 +195,13 @@ class TelemetryIngestionTest extends TestCase
         $this->ingestor->telemetry($gateway, $this->payload($t->addMinutes(6)->getTimestampMs(), ['ozone' => 0.10]), $t->addMinutes(6));
         $this->assertSame(PlantStatus::Alarma, $plant->fresh()->status);
 
-        $this->actingAs($this->user(\App\Enums\Role::Admin))->put("/plantas/{$plant->code}/configuracion", [
-            'setpoints' => ['temperature' => 60, 'alkaline' => 0.3, 'chlorine' => 0.1, 'peracetic' => 0.1, 'chlorine_dioxide' => 0.15],
-            'setpoints_high' => ['chlorine_dioxide' => 0.30],
-            'disinfectant' => 'chlorine_dioxide',
-            'cip_period_days' => 7,
-        ])->assertSessionHasNoErrors();
+        $this->artisan('plant:disinfectant', ['plant' => $plant->code, 'disinfectant' => 'chlorine_dioxide'])->assertSuccessful();
+        $this->artisan('plant:disinfectant', ['plant' => $plant->code, 'disinfectant' => 'cloro'])->assertFailed();
 
         $this->assertNotNull(AlarmEvent::sole()->ended_at);
         $this->assertSame(0, PlantVariableState::where('plant_id', $plant->id)->where('variable_id', Variable::where('key', 'ozone')->value('id'))->count());
         $this->assertSame(PlantStatus::Conforme, $plant->fresh()->status);
+        $this->assertSame('chlorine_dioxide', $plant->settings()->first()->disinfectant);
     }
 
     public function test_conductivity_and_disinfectant_go_straight_to_alarm(): void

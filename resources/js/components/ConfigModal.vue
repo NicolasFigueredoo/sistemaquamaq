@@ -26,11 +26,10 @@ const form = useForm({
         ...Object.fromEntries(disinfectants.map((d) => [d.key, Number(d.setpoint).toFixed(2)])),
     },
     setpoints_high: Object.fromEntries(disinfectants.map((d) => [d.key, Number(d.setpointHigh ?? d.setpoint).toFixed(2)])),
-    disinfectant: props.settings.disinfectant,
     cip_period_days: props.settings.cipPeriodDays,
 })
 
-const disinfectant = computed(() => disinfectants.find((d) => d.key === form.disinfectant))
+const disinfectant = disinfectants.find((d) => d.key === props.settings.disinfectant) ?? disinfectants[0]
 const errors = computed(() => Object.values(form.errors))
 const firstInput = ref(null)
 
@@ -62,8 +61,8 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
                 <button id="config-close" class="modal-close" type="button" aria-label="Cerrar" @click="emit('close')">×</button>
             </div>
             <div class="config-grid">
-                <label class="field"><span>Desinfectante</span><select id="disinfectant-input" ref="firstInput" v-model="form.disinfectant"><option v-for="d in disinfectants" :key="d.key" :value="d.key">{{ d.name }}</option></select><small>el que usa esta fábrica</small></label>
-                <label class="field"><span>{{ disinfectant.name }} · mínimo</span><input id="disinfectant-min-input" v-model="form.setpoints[disinfectant.key]" type="number" :min="disinfectant.setpointMin ?? 0" :max="disinfectant.setpointMax ?? 100" step="0.01" required><small>{{ disinfectant.unit }} · alarma por baja</small></label>
+                <label class="field"><span>Desinfectante</span><input id="disinfectant-input" :value="disinfectant.name" type="text" readonly tabindex="-1"><small>el que usa esta fábrica</small></label>
+                <label class="field"><span>{{ disinfectant.name }} · mínimo</span><input id="disinfectant-min-input" ref="firstInput" v-model="form.setpoints[disinfectant.key]" type="number" :min="disinfectant.setpointMin ?? 0" :max="disinfectant.setpointMax ?? 100" step="0.01" required><small>{{ disinfectant.unit }} · alarma por baja</small></label>
                 <label class="field"><span>{{ disinfectant.name }} · máximo</span><input id="disinfectant-max-input" v-model="form.setpoints_high[disinfectant.key]" type="number" :min="disinfectant.setpointMin ?? 0" :max="disinfectant.setpointMax ?? 100" step="0.01" required><small>{{ disinfectant.unit }} · alarma por alta</small></label>
                 <label class="field"><span>{{ temperature?.name ?? 'Temperatura de lavado' }}</span><input id="temperature-setpoint-input" v-model="form.setpoints.temperature" type="number" :min="temperature?.setpointMin ?? 0" :max="temperature?.setpointMax ?? 100" step="0.1" required><small>{{ temperature?.unit ?? '°C' }}</small></label>
                 <label class="field"><span>{{ alkaline?.name ?? 'Conductividad del agua' }}</span><input id="alkaline-setpoint-input" v-model="form.setpoints.alkaline" type="number" :min="alkaline?.setpointMin ?? 0" :max="alkaline?.setpointMax ?? 20" step="0.01" required><small>{{ alkaline?.unit ?? 'mS/cm' }}</small></label>

@@ -63,8 +63,8 @@ class PanelTest extends TestCase
                 ->where('banner.variable', 'ozone')
                 ->has('chart.ranges.1d.series.ozone')
                 ->where('settings.disinfectant', 'ozone')
+                ->has('settings.disinfectants', 1)
                 ->where('settings.disinfectants.0.key', 'ozone')
-                ->where('settings.disinfectants.1.key', 'chlorine_dioxide')
                 ->has('cip', 2)
                 ->where('can.configure', true)
                 ->where('can.writeNotes', true));
@@ -133,8 +133,9 @@ class PanelTest extends TestCase
     public function test_chlorine_dioxide_range_is_configurable(): void
     {
         [$plant] = $this->makePlant();
+        $plant->settingsOrDefault()->update(['disinfectant' => 'chlorine_dioxide']);
         $admin = $this->user(Role::Admin);
-        $base = ['setpoints' => ['temperature' => 60, 'alkaline' => 0.3, 'chlorine' => 0.1, 'peracetic' => 1], 'disinfectant' => 'chlorine_dioxide', 'cip_period_days' => 7];
+        $base = ['setpoints' => ['temperature' => 60, 'alkaline' => 0.3, 'chlorine' => 0.1, 'peracetic' => 1], 'cip_period_days' => 7];
         $put = fn (float $min, float $max) => $this->actingAs($admin)->put("/plantas/{$plant->code}/configuracion",
             array_replace_recursive($base, ['setpoints' => ['chlorine_dioxide' => $min], 'setpoints_high' => ['chlorine_dioxide' => $max]]));
 
@@ -142,10 +143,31 @@ class PanelTest extends TestCase
         $sp = \App\Models\PlantSetpoint::where('plant_id', $plant->id)->where('variable_id', Variable::where('key', 'chlorine_dioxide')->value('id'))->sole();
         $this->assertEqualsWithDelta(0.30, $sp->setpoint, 0.0001);
         $this->assertEqualsWithDelta(0.60, $sp->setpoint_high, 0.0001);
-        $this->assertEqualsCanonicalizing(['disinfectant:chlorine_dioxide', 'chlorine_dioxide', 'chlorine_dioxide_high'], SetpointChange::pluck('field')->all());
+        $this->assertEqualsCanonicalizing(['chlorine_dioxide', 'chlorine_dioxide_high'], SetpointChange::pluck('field')->all());
         $this->assertSame('chlorine_dioxide', $plant->settings()->first()->disinfectant);
 
         $put(0.60, 0.40)->assertSessionHasErrors('setpoints_high.chlorine_dioxide');
+
+        $this->actingAs($admin)->get("/plantas/{$plant->code}")->assertInertia(fn (Assert $p) => $p
+            ->where('settings.disinfectant', 'chlorine_dioxide')
+            ->has('settings.disinfectants', 1)
+            ->where('settings.disinfectants.0.key', 'chlorine_dioxide'));
+    }
+
+    public function test_disinfectant_cannot_be_switched_from_the_config_screen(): void
+    {
+        [$plant] = $this->makePlant();
+        $plant->settingsOrDefault()->update(['disinfectant' => 'chlorine_dioxide']);
+
+        $this->actingAs($this->user(Role::Admin))->put("/plantas/{$plant->code}/configuracion", [
+            'setpoints' => ['temperature' => 60, 'alkaline' => 0.3, 'chlorine' => 0.1, 'peracetic' => 1, 'chlorine_dioxide' => 0.15, 'ozone' => 0.5],
+            'setpoints_high' => ['chlorine_dioxide' => 0.30, 'ozone' => 1],
+            'disinfectant' => 'ozone',
+            'cip_period_days' => 7,
+        ])->assertSessionHasNoErrors();
+
+        $this->assertSame('chlorine_dioxide', $plant->settings()->first()->disinfectant);
+        $this->assertNotContains('ozone', SetpointChange::pluck('field')->all());
     }
 
     public function test_auditor_saves_notes(): void
